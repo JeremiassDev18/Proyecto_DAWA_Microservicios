@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
 from app.models import Mesa, Sucursal
+from app.auth import requiere_roles
+from app.audit import registrar_auditoria
 
 mesas_bp = Blueprint("mesas", __name__)
 
@@ -28,6 +30,7 @@ def listar_mesas():
 
 
 @mesas_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
 def crear_mesa():
     data = request.get_json()
 
@@ -55,6 +58,13 @@ def crear_mesa():
         db.add(nueva_mesa)
         db.commit()
         db.refresh(nueva_mesa)
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "CREAR",
+            "MESAS",
+            f"Se creó la mesa número {nueva_mesa.numero}"
+        )
 
         return jsonify({
             "mensaje": "Mesa creada correctamente",
@@ -99,6 +109,7 @@ def obtener_mesa(id):
 
 
 @mesas_bp.route("/<int:id>", methods=["PUT"])
+@requiere_roles(["admin", "administrador"])
 def actualizar_mesa(id):
     data = request.get_json()
 
@@ -129,6 +140,13 @@ def actualizar_mesa(id):
 
         db.commit()
 
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ACTUALIZAR",
+            "MESAS",
+            f"Se actualizó la mesa con ID {id}"
+        )
+
         return jsonify({"mensaje": "Mesa actualizada correctamente"}), 200
     except Exception as e:
         db.rollback()
@@ -138,6 +156,7 @@ def actualizar_mesa(id):
 
 
 @mesas_bp.route("/<int:id>", methods=["DELETE"])
+@requiere_roles(["admin", "administrador"])
 def eliminar_mesa(id):
     db = SessionLocal()
     try:
@@ -151,6 +170,13 @@ def eliminar_mesa(id):
 
         mesa.estado = False
         db.commit()
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ELIMINAR",
+            "MESAS",
+            f"Se eliminó lógicamente la mesa con ID {id}"
+        )
 
         return jsonify({"mensaje": "Mesa eliminada correctamente"}), 200
     except Exception as e:
@@ -317,3 +343,43 @@ def eliminar_mesa(id):
         return jsonify({"error": str(e)}), 500
     finally:
         db.close()
+
+@mesas_bp.route("/disponibles", methods=["GET"])
+def mesas_disponibles():
+    sucursal_id = request.args.get("sucursal_id")
+    personas = request.args.get("personas")
+
+    if not sucursal_id or not personas:
+        return jsonify({
+            "error": "Los parámetros sucursal_id y personas son obligatorios"
+        }), 400
+
+    db = SessionLocal()
+    try:
+        mesas = db.query(Mesa).filter(
+            Mesa.sucursal_id == int(sucursal_id),
+            Mesa.capacidad >= int(personas),
+            Mesa.estado == True
+        ).all()
+
+        resultado = []
+        for mesa in mesas:
+            resultado.append({
+                "id": mesa.id,
+                "numero": mesa.numero,
+                "capacidad": mesa.capacidad,
+                "ubicacion": mesa.ubicacion,
+                "sucursal_id": mesa.sucursal_id
+            })
+
+        return jsonify({
+            "mensaje": "Mesas disponibles obtenidas correctamente",
+            "mesas_disponibles": resultado
+        }), 200
+
+    except ValueError:
+        return jsonify({
+            "error": "sucursal_id y personas deben ser números"
+        }), 400
+    finally:
+        db.close()        

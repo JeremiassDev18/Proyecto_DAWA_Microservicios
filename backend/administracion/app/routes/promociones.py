@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
 from app.models import Promocion, Sucursal
+from app.auth import requiere_roles
+from app.audit import registrar_auditoria
 
 promociones_bp = Blueprint("promociones", __name__)
 
@@ -28,6 +30,7 @@ def listar_promociones():
 
 
 @promociones_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
 def crear_promocion():
     data = request.get_json()
 
@@ -100,6 +103,7 @@ def obtener_promocion(id):
 
 
 @promociones_bp.route("/<int:id>", methods=["PUT"])
+@requiere_roles(["admin", "administrador"])
 def actualizar_promocion(id):
     data = request.get_json()
 
@@ -142,6 +146,7 @@ def actualizar_promocion(id):
 
 
 @promociones_bp.route("/<int:id>", methods=["DELETE"])
+@requiere_roles(["admin", "administrador"])
 def eliminar_promocion(id):
     db = SessionLocal()
     try:

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app.database import SessionLocal
 from app.models import HorarioAtencion, Sucursal
+from app.auth import requiere_roles
 
 horarios_bp = Blueprint("horarios", __name__)
 
@@ -29,6 +30,7 @@ def listar_horarios():
 
 
 @horarios_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
 def crear_horario():
     data = request.get_json()
 
@@ -108,6 +110,7 @@ def obtener_horario(id):
 
 
 @horarios_bp.route("/<int:id>", methods=["PUT"])
+@requiere_roles(["admin", "administrador"])
 def actualizar_horario(id):
     data = request.get_json()
 
@@ -157,6 +160,7 @@ def actualizar_horario(id):
 
 
 @horarios_bp.route("/<int:id>", methods=["DELETE"])
+@requiere_roles(["admin", "administrador"])
 def eliminar_horario(id):
     db = SessionLocal()
     try:

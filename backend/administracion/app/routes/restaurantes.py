@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
 from app.models import Restaurante
+from app.auth import requiere_roles
+from app.audit import registrar_auditoria
 
 restaurantes_bp = Blueprint("restaurantes", __name__)
 
@@ -26,6 +28,7 @@ def listar_restaurantes():
 
 
 @restaurantes_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
 def crear_restaurante():
     data = request.get_json()
 
@@ -43,6 +46,12 @@ def crear_restaurante():
         db.add(nuevo_restaurante)
         db.commit()
         db.refresh(nuevo_restaurante)
+        registrar_auditoria(
+        request.headers.get("X-User-Id"),
+            "CREAR",
+            "RESTAURANTES",
+            f"Se creó el restaurante {nuevo_restaurante.nombre}"
+)
 
         return jsonify({
             "mensaje": "Restaurante creado correctamente",
@@ -83,6 +92,7 @@ def obtener_restaurante(id):
 
 
 @restaurantes_bp.route("/<int:id>", methods=["PUT"])
+@requiere_roles(["admin", "administrador"])
 def actualizar_restaurante(id):
     data = request.get_json()
 
@@ -110,6 +120,7 @@ def actualizar_restaurante(id):
 
 
 @restaurantes_bp.route("/<int:id>", methods=["DELETE"])
+@requiere_roles(["admin", "administrador"])
 def eliminar_restaurante(id):
     db = SessionLocal()
     try:

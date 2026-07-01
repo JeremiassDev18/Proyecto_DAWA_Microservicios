@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Time, Numeric
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Time, Numeric, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -67,3 +68,15 @@ class Promocion(Base):
     estado = Column(Boolean, default=True)
 
     sucursal = relationship("Sucursal", back_populates="promociones")
+
+
+
+class AuditoriaAdministracion(Base):
+    __tablename__ = "auditoria_administracion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(String(50))
+    accion = Column(String(100), nullable=False)
+    modulo = Column(String(50), nullable=False)
+    descripcion = Column(Text)
+    fecha = Column(DateTime, default=datetime.utcnow)

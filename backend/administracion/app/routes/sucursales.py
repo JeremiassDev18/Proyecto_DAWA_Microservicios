@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
 from app.models import Sucursal, Restaurante
+from app.auth import requiere_roles
+from app.audit import registrar_auditoria
 
 sucursales_bp = Blueprint("sucursales", __name__)
 
@@ -28,6 +30,7 @@ def listar_sucursales():
 
 
 @sucursales_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
 def crear_sucursal():
     data = request.get_json()
 
@@ -55,6 +58,13 @@ def crear_sucursal():
         db.add(nueva_sucursal)
         db.commit()
         db.refresh(nueva_sucursal)
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "CREAR",
+            "SUCURSALES",
+            f"Se creó la sucursal {nueva_sucursal.nombre}"
+        )
 
         return jsonify({
             "mensaje": "Sucursal creada correctamente",
@@ -99,6 +109,7 @@ def obtener_sucursal(id):
 
 
 @sucursales_bp.route("/<int:id>", methods=["PUT"])
+@requiere_roles(["admin", "administrador"])
 def actualizar_sucursal(id):
     data = request.get_json()
 
@@ -129,6 +140,13 @@ def actualizar_sucursal(id):
 
         db.commit()
 
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ACTUALIZAR",
+            "SUCURSALES",
+            f"Se actualizó la sucursal con ID {id}"
+        )
+
         return jsonify({"mensaje": "Sucursal actualizada correctamente"}), 200
     except Exception as e:
         db.rollback()
@@ -138,6 +156,7 @@ def actualizar_sucursal(id):
 
 
 @sucursales_bp.route("/<int:id>", methods=["DELETE"])
+@requiere_roles(["admin", "administrador"])
 def eliminar_sucursal(id):
     db = SessionLocal()
     try:
@@ -151,6 +170,13 @@ def eliminar_sucursal(id):
 
         sucursal.estado = False
         db.commit()
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ELIMINAR",
+            "SUCURSALES",
+            f"Se eliminó lógicamente la sucursal con ID {id}"
+        )
 
         return jsonify({"mensaje": "Sucursal eliminada correctamente"}), 200
     except Exception as e:
