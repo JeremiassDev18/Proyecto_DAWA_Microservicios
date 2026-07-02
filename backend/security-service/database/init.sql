@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     accion TEXT NOT NULL,
     fecha TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     direccion_ip VARCHAR(45),
+    detalles JSONB DEFAULT '{}'::jsonb,
     FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
 );
 
@@ -72,6 +73,39 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 -- Index for efficient token blacklist lookups
 CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(token_jti);
 CREATE INDEX IF NOT EXISTS idx_token_blacklist_expira ON token_blacklist(expira_en);
+
+-- Sessions table to persist issued tokens (JTIs) for session management
+CREATE TABLE IF NOT EXISTS sessions (
+    id SERIAL PRIMARY KEY,
+    token_jti VARCHAR(255) NOT NULL UNIQUE,
+    usuario_id INTEGER NOT NULL,
+    user_agent TEXT,
+    creado_en TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    expira_en TIMESTAMP WITH TIME ZONE NOT NULL,
+    revocado BOOLEAN NOT NULL DEFAULT FALSE,
+    revocado_en TIMESTAMP WITH TIME ZONE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    usuario_id INTEGER NOT NULL,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    creado_en TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    expira_en TIMESTAMP WITH TIME ZONE NOT NULL,
+    revocado BOOLEAN NOT NULL DEFAULT FALSE,
+    revocado_en TIMESTAMP WITH TIME ZONE,
+    razon VARCHAR(255),
+    FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expira ON refresh_tokens(expira_en);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_usuario_id ON sessions(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expira_en ON sessions(expira_en);
 
 INSERT INTO roles (nombre_rol, descripcion)
 VALUES

@@ -1,47 +1,63 @@
+version: "3.9"
+
 services:
+
   security-db:
     image: postgres:16
     container_name: security-db
+    restart: unless-stopped
+
     environment:
       POSTGRES_DB: seguridaddb
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
+
+    ports:
+      - "5432:5432"
+
     volumes:
       - security-db-data:/var/lib/postgresql/data
       - ./backend/security-service/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
     networks:
       security-network:
         aliases:
           - security-db
-    ports:
-      - "5432:5432"
 
   security-service:
     build:
       context: ./backend/security-service
       dockerfile: Dockerfile
+
     container_name: security-service
+    restart: unless-stopped
+
+    depends_on:
+      - security-db
+
+    ports:
+      - "5001:5001"
+
     environment:
       DB_HOST: security-db
       DB_PORT: 5432
       DB_NAME: seguridaddb
       DB_USER: admin
       DB_PASSWORD: admin123
+
       JWT_SECRET_KEY: supersecretkey
       JWT_ALGORITHM: HS256
       JWT_ACCESS_TOKEN_EXPIRES: 900
-    depends_on:
-      - security-db
-    ports:
-      - "5001:5001"
+
     networks:
       security-network:
         aliases:
           - security-service
 
-networks:
-  security-network:
-    driver: bridge
-
 volumes:
   security-db-data:
+
+networks:
+  security-network:
+    name: security-network
+    driver: bridge

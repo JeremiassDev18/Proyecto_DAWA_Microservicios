@@ -22,6 +22,30 @@ class UserService:
         return execute_query(query, (email, password_hash, nombre), fetch_one=True)
 
     @staticmethod
+    def get_users() -> List[Dict[str, Any]]:
+        query = "SELECT id, email, nombre, estado, creado_en FROM usuarios"
+        return execute_query(query, fetch_all=True)
+
+    @staticmethod
+    def get_user_by_id(usuario_id: int) -> Optional[Dict[str, Any]]:
+        query = "SELECT id, email, nombre, estado, creado_en FROM usuarios WHERE id = %s LIMIT 1"
+        return execute_query(query, (usuario_id,), fetch_one=True)
+
+    @staticmethod
+    def update_user(usuario_id: int, nombre: str, estado: bool) -> Optional[Dict[str, Any]]:
+        query = (
+            "UPDATE usuarios SET nombre = %s, estado = %s WHERE id = %s "
+            "RETURNING id, email, nombre, estado, creado_en"
+        )
+        return execute_query(query, (nombre, estado, usuario_id), fetch_one=True)
+
+    @staticmethod
+    def delete_user(usuario_id: int) -> bool:
+        query = "DELETE FROM usuarios WHERE id = %s RETURNING id"
+        result = execute_query(query, (usuario_id,), fetch_one=True)
+        return result is not None
+
+    @staticmethod
     def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
         user = UserService.get_user_by_email(email)
         if not user:
@@ -130,6 +154,44 @@ class RoleService:
         )
         return execute_query(query, (usuario_id, rol_id), fetch_one=True)
 
+    @staticmethod
+    def assign_permission_to_role(rol_id: int, permiso_id: int) -> Dict[str, Any]:
+        query = (
+            "INSERT INTO roles_permisos (rol_id, permiso_id) "
+            "VALUES (%s, %s) RETURNING rol_id, permiso_id"
+        )
+        return execute_query(query, (rol_id, permiso_id), fetch_one=True)
+
+    @staticmethod
+    def get_role_permissions(rol_id: int) -> List[Dict[str, Any]]:
+        query = (
+            "SELECT p.id, p.nombre_permiso, p.descripcion "
+            "FROM permisos p "
+            "JOIN roles_permisos rp ON p.id = rp.permiso_id "
+            "WHERE rp.rol_id = %s"
+        )
+        return execute_query(query, (rol_id,), fetch_all=True) or []
+
+    @staticmethod
+    def remove_permission_from_role(rol_id: int, permiso_id: int) -> bool:
+        query = "DELETE FROM roles_permisos WHERE rol_id = %s AND permiso_id = %s RETURNING rol_id, permiso_id"
+        result = execute_query(query, (rol_id, permiso_id), fetch_one=True)
+        return result is not None
+
+    @staticmethod
+    def update_role(rol_id: int, nombre_rol: str, descripcion: str) -> Optional[Dict[str, Any]]:
+        query = (
+            "UPDATE roles SET nombre_rol = %s, descripcion = %s "
+            "WHERE id = %s RETURNING id, nombre_rol, descripcion"
+        )
+        return execute_query(query, (nombre_rol, descripcion, rol_id), fetch_one=True)
+
+    @staticmethod
+    def delete_role(rol_id: int) -> bool:
+        query = "DELETE FROM roles WHERE id = %s RETURNING id"
+        result = execute_query(query, (rol_id,), fetch_one=True)
+        return result is not None
+
 
 class PermissionService:
     @staticmethod
@@ -144,3 +206,68 @@ class PermissionService:
             "VALUES (%s, %s) RETURNING id, nombre_permiso, descripcion"
         )
         return execute_query(query, (nombre_permiso, descripcion), fetch_one=True)
+
+    @staticmethod
+    def update_permission(permiso_id: int, nombre_permiso: str, descripcion: str) -> Optional[Dict[str, Any]]:
+        query = (
+            "UPDATE permisos SET nombre_permiso = %s, descripcion = %s "
+            "WHERE id = %s RETURNING id, nombre_permiso, descripcion"
+        )
+        return execute_query(query, (nombre_permiso, descripcion, permiso_id), fetch_one=True)
+
+    @staticmethod
+    def delete_permission(permiso_id: int) -> bool:
+        query = "DELETE FROM permisos WHERE id = %s RETURNING id"
+        result = execute_query(query, (permiso_id,), fetch_one=True)
+        return result is not None
+
+
+class SessionService:
+    @staticmethod
+    def get_active_sessions(usuario_id: int):
+        query = (
+            "SELECT token_jti, usuario_id, user_agent, creado_en, expira_en, revocado, revocado_en "
+            "FROM sessions WHERE usuario_id = %s AND revocado = FALSE AND expira_en > NOW() ORDER BY creado_en DESC"
+        )
+        return execute_query(query, (usuario_id,), fetch_all=True)
+
+    @staticmethod
+    def get_session_by_jti(token_jti: str):
+        query = "SELECT id, usuario_id, token_jti FROM sessions WHERE token_jti = %s LIMIT 1"
+        return execute_query(query, (token_jti,), fetch_one=True)
+
+    @staticmethod
+    def revoke_all_sessions(usuario_id: int, reason: str = "logout_all") -> int:
+        # Fetch JTIs for user
+        rows = execute_query("SELECT token_jti FROM sessions WHERE usuario_id = %s AND revocado = FALSE", (usuario_id,), fetch_all=True)
+        count = 0
+        if rows:
+            for r in rows:
+                jti = r.get("token_jti")
+                try:
+                    # mark session revoked
+                    execute_query(
+                        "UPDATE sessions SET revocado = TRUE, revocado_en = NOW() WHERE token_jti = %s",
+                        (jti,),
+                    )
+                    # add to blacklist
+                    execute_query(
+                        "INSERT INTO token_blacklist (token_jti, usuario_id, expira_en, razon) VALUES (%s, %s, %s, %s)",
+                        (jti, usuario_id, datetime.datetime.utcnow() + datetime.timedelta(days=1), reason),
+                    )
+                    count += 1
+                except Exception:
+                    pass
+        return count
+
+    @staticmethod
+    def revoke_session(jti: str, usuario_id: Optional[int] = None, reason: str = "logout") -> bool:
+        try:
+            execute_query("UPDATE sessions SET revocado = TRUE, revocado_en = NOW() WHERE token_jti = %s", (jti,))
+            execute_query(
+                "INSERT INTO token_blacklist (token_jti, usuario_id, expira_en, razon) VALUES (%s, %s, %s, %s)",
+                (jti, usuario_id, datetime.datetime.utcnow() + datetime.timedelta(days=1), reason),
+            )
+            return True
+        except Exception:
+            return False

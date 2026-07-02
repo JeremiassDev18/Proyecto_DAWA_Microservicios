@@ -8,6 +8,7 @@ from argon2 import PasswordHasher
 from flask import jsonify, request, g
 
 from config import Config
+from db import execute_query
 
 ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4, hash_len=32, salt_len=16)
 
@@ -28,15 +29,17 @@ def create_access_token(
     expires_delta: Optional[int] = None,
     roles: Optional[List[str]] = None,
     permissions: Optional[List[str]] = None,
+    return_jti: bool = False,
 ) -> str:
     now = datetime.datetime.utcnow()
     expires_in = expires_delta or Config.JWT_ACCESS_TOKEN_EXPIRES
+    exp = now + datetime.timedelta(seconds=expires_in)
     jti = str(uuid.uuid4())  # JWT ID for token revocation
     
     payload = {
         "sub": str(subject.get("id", "unknown")),
         "iat": now,
-        "exp": now + datetime.timedelta(seconds=expires_in),
+        "exp": exp,
         "type": "access",
         "jti": jti,
         "roles": roles or [],
@@ -44,6 +47,29 @@ def create_access_token(
         "user": subject,
     }
     token = jwt.encode(payload, Config.JWT_SECRET_KEY, algorithm=Config.JWT_ALGORITHM)
+    # Persist session JTI so refresh tokens can be linked to a session
+    try:
+        usuario_id = subject.get("id")
+        execute_query(
+            "INSERT INTO sessions (token_jti, usuario_id, expira_en) VALUES (%s, %s, %s)",
+            (jti, usuario_id, exp),
+        )
+    except Exception:
+        pass
+    if return_jti:
+        return token, jti, exp
+    return token
+
+
+def create_refresh_token(session_id: int, usuario_id: int, expires_delta: Optional[int] = None) -> str:
+    token = str(uuid.uuid4())
+    expires_in = expires_delta or Config.JWT_REFRESH_TOKEN_EXPIRES
+    exp = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
+
+    execute_query(
+        "INSERT INTO refresh_tokens (session_id, usuario_id, token, expira_en) VALUES (%s, %s, %s, %s)",
+        (session_id, usuario_id, token, exp),
+    )
     return token
 
 
@@ -106,7 +132,6 @@ def blacklist_token(jti: str, usuario_id: Optional[int] = None, reason: str = "l
     from db import execute_query
     
     if not expires_at:
-        # Default to 24 hours
         expires_at = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
     
     query = (
@@ -134,3 +159,22 @@ def is_token_blacklisted(jti: str) -> bool:
         fetch_one=True
     )
     return result is not None
+
+
+def validate_refresh_token(token: str, usuario_id: int) -> Optional[Dict[str, Any]]:
+    query = (
+        "SELECT id, session_id, usuario_id FROM refresh_tokens "
+        "WHERE token = %s AND usuario_id = %s AND revocado = FALSE AND expira_en > NOW() LIMIT 1"
+    )
+    return execute_query(query, (token, usuario_id), fetch_one=True)
+
+
+def revoke_refresh_token(token: str, reason: str = "refresh_revoke") -> bool:
+    try:
+        execute_query(
+            "UPDATE refresh_tokens SET revocado = TRUE, revocado_en = NOW(), razon = %s WHERE token = %s",
+            (reason, token),
+        )
+        return True
+    except Exception:
+        return False

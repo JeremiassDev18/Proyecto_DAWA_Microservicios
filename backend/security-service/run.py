@@ -1,10 +1,16 @@
 from flask import Flask, jsonify, request, g
 from flask_cors import CORS
 
-from auth import authorize, create_access_token, blacklist_token
+from auth import authorize, create_access_token, create_refresh_token, validate_refresh_token, revoke_refresh_token, blacklist_token, decode_token, is_token_blacklisted
+import json
+import datetime
+from app.utils.audit import audit_log
+from app.utils.email_utils import send_password_reset_email
+from app.routes.permission_routes import permission_bp
 from config import Config
 from db import init_db_pool, execute_query
-from services import PermissionService, RoleService, UserService
+from services import RoleService, UserService
+from services import SessionService
 
 
 def create_app() -> Flask:
@@ -13,13 +19,31 @@ def create_app() -> Flask:
     app.config["JSON_SORT_KEYS"] = False
 
     CORS(app)
-    init_db_pool()
+    app.register_blueprint(permission_bp)
+
+    @app.before_request
+    def check_blacklisted_token():
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = decode_token(token)
+        except Exception:
+            # invalid token will be handled by authorize decorator where needed
+            return None
+
+        jti = payload.get("jti")
+        if jti and is_token_blacklisted(jti):
+            return jsonify({"error": "Token revocado"}), 401
 
     @app.route("/health", methods=["GET"])
     def health_check():
         return jsonify({"status": "ok", "service": "security-service"}), 200
 
     @app.route("/login", methods=["POST"])
+    @audit_log("login")
     def login():
         payload = request.get_json() or {}
         email = payload.get("email")
@@ -30,28 +54,107 @@ def create_app() -> Flask:
 
         user = UserService.authenticate_user(email, password)
         if not user:
+            # Log failed login attempt
+            try:
+                remote_addr = request.remote_addr or request.headers.get("X-Forwarded-For", None)
+                details = {"email": email, "reason": "invalid_credentials"}
+                execute_query(
+                    "INSERT INTO auditoria (usuario_id, accion, direccion_ip, detalles) VALUES (%s, %s, %s, %s::jsonb)",
+                    (None, "login_failed", remote_addr, json.dumps(details)),
+                )
+            except Exception:
+                pass
             return jsonify({"error": "Credenciales inválidas."}), 401
 
+        g.audit_user_id = user["id"]
         user_roles = UserService.get_user_roles(user["id"])
         user_permissions = UserService.get_user_permissions(user["id"])
 
-        access_token = create_access_token(
+        access_token, jti, exp = create_access_token(
             {"id": user["id"], "email": user["email"]},
             roles=user_roles,
             permissions=user_permissions,
+            return_jti=True,
         )
-        return jsonify(
-            {
-                "access_token": access_token,
-                "user": {
-                    "id": user["id"],
-                    "email": user["email"],
-                    "nombre": user["nombre"],
-                    "roles": user_roles,
-                    "permissions": user_permissions,
-                },
-            }
-        ), 200
+
+        try:
+            session = execute_query(
+                "SELECT id FROM sessions WHERE token_jti = %s LIMIT 1",
+                (jti,),
+                fetch_one=True,
+            )
+            if session:
+                refresh_token = create_refresh_token(session["id"], user["id"])
+            else:
+                refresh_token = None
+        except Exception:
+            refresh_token = None
+
+        response = {
+            "access_token": access_token,
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "nombre": user["nombre"],
+                "roles": user_roles,
+                "permissions": user_permissions,
+            },
+        }
+
+        if refresh_token:
+            response["refresh_token"] = refresh_token
+
+        return jsonify(response), 200
+
+    @app.route("/refresh", methods=["POST"])
+    def refresh_access_token():
+        payload = request.get_json() or {}
+        refresh_token = payload.get("refresh_token")
+        usuario_id = payload.get("usuario_id")
+
+        if not refresh_token or not usuario_id:
+            return jsonify({"error": "refresh_token y usuario_id son requeridos"}), 400
+
+        refresh_data = validate_refresh_token(refresh_token, usuario_id)
+        if not refresh_data:
+            return jsonify({"error": "Refresh token inválido o expirado"}), 401
+
+        session_id = refresh_data["session_id"]
+        user = UserService.get_user_by_id(usuario_id)
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+        user_roles = UserService.get_user_roles(usuario_id)
+        user_permissions = UserService.get_user_permissions(usuario_id)
+
+        access_token, jti, exp = create_access_token(
+            {"id": user["id"], "email": user["email"]},
+            roles=user_roles,
+            permissions=user_permissions,
+            return_jti=True,
+        )
+
+        try:
+            execute_query(
+                "UPDATE sessions SET token_jti = %s, expira_en = %s, revocado = FALSE, revocado_en = NULL WHERE id = %s",
+                (jti, exp, session_id),
+            )
+        except Exception:
+            pass
+
+        return jsonify({"access_token": access_token}), 200
+
+    @app.route("/refresh/revoke", methods=["POST"])
+    def revoke_refresh():
+        payload = request.get_json() or {}
+        refresh_token = payload.get("refresh_token")
+        if not refresh_token:
+            return jsonify({"error": "refresh_token es requerido"}), 400
+
+        success = revoke_refresh_token(refresh_token, reason="manual_revoke")
+        if not success:
+            return jsonify({"error": "No se pudo revocar el refresh token"}), 400
+        return jsonify({"mensaje": "Refresh token revocado"}), 200
 
     @app.route("/usuarios", methods=["POST"])
     def register_user():
@@ -70,17 +173,92 @@ def create_app() -> Flask:
         user = UserService.create_user(email, password, nombre)
         return jsonify({"usuario": user}), 201
 
+    @app.route("/usuarios", methods=["GET"])
+    @authorize(required_roles=["admin"], required_permissions=["read_users"])
+    def list_users():
+        usuarios = UserService.get_users()
+        return jsonify({"usuarios": usuarios}), 200
+
+    @app.route("/usuarios/<int:usuario_id>", methods=["GET"])
+    @authorize(required_roles=["admin"], required_permissions=["read_users"])
+    def get_user(usuario_id: int):
+        user = UserService.get_user_by_id(usuario_id)
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        return jsonify({"usuario": user}), 200
+
+    @app.route("/usuarios/<int:usuario_id>", methods=["PUT"])
+    @audit_log("update_user")
+    @authorize(required_roles=["admin"], required_permissions=["write_users"])
+    def update_user(usuario_id: int):
+        payload = request.get_json() or {}
+        nombre = payload.get("nombre")
+        estado = payload.get("estado", True)
+
+        if nombre is None:
+            return jsonify({"error": "nombre es requerido"}), 400
+
+        updated = UserService.update_user(usuario_id, nombre, bool(estado))
+        if not updated:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        return jsonify({"usuario": updated}), 200
+
+    @app.route("/usuarios/<int:usuario_id>", methods=["DELETE"])
+    @audit_log("delete_user")
+    @authorize(required_roles=["admin"], required_permissions=["write_users"])
+    def delete_user(usuario_id: int):
+        deleted = UserService.delete_user(usuario_id)
+        if not deleted:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        return jsonify({"mensaje": "Usuario eliminado exitosamente"}), 200
+
     @app.route("/roles", methods=["GET"])
     def get_roles():
         roles = RoleService.get_roles()
         return jsonify({"roles": roles}), 200
 
-    @app.route("/permisos", methods=["GET"])
-    def get_permissions():
-        permissions = PermissionService.get_permissions()
-        return jsonify({"permisos": permissions}), 200
+    @app.route("/roles", methods=["POST"])
+    @audit_log("create_role")
+    @authorize(required_roles=["admin"], required_permissions=["write_users"])
+    def create_role():
+        payload = request.get_json() or {}
+        nombre_rol = payload.get("nombre_rol")
+        descripcion = payload.get("descripcion")
+
+        if not nombre_rol:
+            return jsonify({"error": "nombre_rol es requerido"}), 400
+
+        role = RoleService.create_role(nombre_rol, descripcion)
+        return jsonify({"rol": role}), 201
+
+    @app.route("/roles/<int:rol_id>", methods=["PUT"])
+    @audit_log("update_role")
+    @authorize(required_roles=["admin"], required_permissions=["write_users"])
+    def update_role(rol_id: int):
+        payload = request.get_json() or {}
+        nombre_rol = payload.get("nombre_rol")
+        descripcion = payload.get("descripcion")
+
+        if not nombre_rol:
+            return jsonify({"error": "nombre_rol es requerido"}), 400
+
+        updated = RoleService.update_role(rol_id, nombre_rol, descripcion)
+        if not updated:
+            return jsonify({"error": "Rol no encontrado"}), 404
+
+        return jsonify({"rol": updated}), 200
+
+    @app.route("/roles/<int:rol_id>", methods=["DELETE"])
+    @audit_log("delete_role")
+    @authorize(required_roles=["admin"], required_permissions=["write_users"])
+    def delete_role(rol_id: int):
+        deleted = RoleService.delete_role(rol_id)
+        if not deleted:
+            return jsonify({"error": "Rol no encontrado"}), 404
+        return jsonify({"mensaje": "Rol eliminado exitosamente"}), 200
 
     @app.route("/usuarios/<int:usuario_id>/roles", methods=["POST"])
+    @audit_log("assign_role")
     @authorize(required_roles=["admin"], required_permissions=["write_users"])
     def assign_role(usuario_id: int):
         payload = request.get_json() or {}
@@ -98,6 +276,7 @@ def create_app() -> Flask:
         return jsonify({"message": "Acceso autorizado"}), 200
 
     @app.route("/usuarios/<int:usuario_id>/cambiar-contrasena", methods=["POST"])
+    @audit_log("change_password")
     @authorize(required_roles=[], required_permissions=[])  # Any authenticated user can change their own password
     def change_password(usuario_id: int):
         """Change password endpoint. Users can only change their own password unless they're admin."""
@@ -136,6 +315,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Usuario no encontrado"}), 404
 
         # Change password
+        # attach audit detail about password change (no password content)
+        g.audit_details = {"target_user_id": usuario_id}
         UserService.change_password(usuario_id, new_password)
         return jsonify({"mensaje": "Contraseña actualizada exitosamente"}), 200
 
@@ -155,13 +336,12 @@ def create_app() -> Flask:
 
         # Generate reset token
         reset_token = UserService.create_password_reset_token(user["id"])
-        
-        # TODO: Send token via email
-        # For now, return token in response (in production, send via email only)
-        return jsonify({
-            "mensaje": "Si el email existe, se enviará un enlace de recuperación",
-            "reset_token": reset_token  # Remove in production!
-        }), 200
+        try:
+            send_password_reset_email(user["email"], reset_token)
+        except Exception:
+            pass
+
+        return jsonify({"mensaje": "Si el email existe, se enviará un enlace de recuperación"}), 200
 
     @app.route("/usuarios/resetear-contrasena", methods=["POST"])
     def reset_password_with_token():
@@ -218,13 +398,12 @@ def create_app() -> Flask:
         
         if not user_id:
             return jsonify({"error": "Usuario no identificado"}), 401
-        
-        # Get all active tokens for this user (with jti stored in audit or session table)
-        # For now, just acknowledge the request
-        # In production, would need to track all issued tokens per user
+        # Revoke all sessions for the user using SessionService
+        revoked_count = SessionService.revoke_all_sessions(user_id, reason="logout_all")
+
         return jsonify({
             "mensaje": "Todas las sesiones han sido cerradas",
-            "note": "Próximas característica: cierre de todas las sesiones en otros dispositivos"
+            "revoked": revoked_count
         }), 200
 
     @app.route("/sessions/active", methods=["GET"])
@@ -236,17 +415,67 @@ def create_app() -> Flask:
         if not user_id:
             return jsonify({"error": "Usuario no identificado"}), 401
         
-        # TODO: Implement session tracking
-        return jsonify({
-            "sesiones": [
-                {
-                    "id": "current",
-                    "dispositivo": "Dispositivo actual",
-                    "fecha_login": "ahora",
-                    "ubicacion": "Desconocida"
-                }
-            ]
-        }), 200
+        sessions = SessionService.get_active_sessions(user_id)
+        # normalize datetimes
+        for s in (sessions or []):
+            f = s.get("creado_en")
+            if hasattr(f, "isoformat"):
+                s["creado_en"] = f.isoformat()
+            e = s.get("expira_en")
+            if hasattr(e, "isoformat"):
+                s["expira_en"] = e.isoformat()
+
+        return jsonify({"sesiones": sessions or []}), 200
+
+    @app.route("/auditoria", methods=["GET"])
+    @authorize(required_roles=["admin"], required_permissions=["read_reports"])
+    def list_auditoria():
+        """List audit records with optional filters: usuario_id, accion, desde, hasta, limit, offset"""
+        usuario_id = request.args.get("usuario_id")
+        accion = request.args.get("accion")
+        desde = request.args.get("desde")
+        hasta = request.args.get("hasta")
+        try:
+            limit = int(request.args.get("limit", 100))
+        except Exception:
+            limit = 100
+        try:
+            offset = int(request.args.get("offset", 0))
+        except Exception:
+            offset = 0
+
+        where_clauses = []
+        params = []
+        if usuario_id:
+            where_clauses.append("usuario_id = %s")
+            params.append(usuario_id)
+        if accion:
+            where_clauses.append("accion = %s")
+            params.append(accion)
+        if desde:
+            where_clauses.append("fecha >= %s")
+            params.append(desde)
+        if hasta:
+            where_clauses.append("fecha <= %s")
+            params.append(hasta)
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        query = (
+            "SELECT id, usuario_id, accion, fecha, direccion_ip, detalles "
+            f"FROM auditoria {where_sql} ORDER BY fecha DESC LIMIT %s OFFSET %s"
+        )
+        params.extend([limit, offset])
+
+        results = execute_query(query, tuple(params), fetch_all=True)
+
+        # Normalize datetime to ISO strings
+        for row in (results or []):
+            f = row.get("fecha")
+            if isinstance(f, datetime.datetime):
+                row["fecha"] = f.isoformat()
+
+        return jsonify({"auditoria": results}), 200
 
     return app
 
