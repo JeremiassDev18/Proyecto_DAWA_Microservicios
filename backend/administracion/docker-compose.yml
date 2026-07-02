@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+
+  administracion:
+    build: .
+    container_name: ms_administracion
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    depends_on:
+      - postgres_admin
+    networks:
+      - dawa_network
+
+  postgres_admin:
+    image: postgres:16
+    container_name: postgres_admin
+    restart: always
+    environment:
+      POSTGRES_DB: administracion_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_admin_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - dawa_network
+
+volumes:
+  postgres_admin_data:
+
+networks:
+  dawa_network:
