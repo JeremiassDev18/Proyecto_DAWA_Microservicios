@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app.database import SessionLocal
-from app.models import HorarioAtencion, Sucursal
+from app.models import HorarioAtencion, Paralelo
 from app.auth import requiere_roles
+from app.audit import registrar_auditoria
 
 horarios_bp = Blueprint("horarios", __name__)
 
@@ -12,15 +13,15 @@ def listar_horarios():
     db = SessionLocal()
     try:
         horarios = db.query(HorarioAtencion).filter(HorarioAtencion.estado == True).all()
-
         resultado = []
+
         for horario in horarios:
             resultado.append({
                 "id": horario.id,
                 "dia": horario.dia,
-                "hora_apertura": str(horario.hora_apertura),
-                "hora_cierre": str(horario.hora_cierre),
-                "sucursal_id": horario.sucursal_id,
+                "hora_inicio": str(horario.hora_inicio),
+                "hora_fin": str(horario.hora_fin),
+                "paralelo_id": horario.paralelo_id,
                 "estado": horario.estado
             })
 
@@ -34,30 +35,30 @@ def listar_horarios():
 def crear_horario():
     data = request.get_json()
 
-    if not data or not data.get("dia") or not data.get("hora_apertura") or not data.get("hora_cierre") or not data.get("sucursal_id"):
-        return jsonify({"error": "Día, hora_apertura, hora_cierre y sucursal_id son obligatorios"}), 400
+    if not data or not data.get("dia") or not data.get("hora_inicio") or not data.get("hora_fin") or not data.get("paralelo_id"):
+        return jsonify({"error": "Día, hora_inicio, hora_fin y paralelo_id son obligatorios"}), 400
 
     db = SessionLocal()
     try:
-        sucursal = db.query(Sucursal).filter(
-            Sucursal.id == data.get("sucursal_id"),
-            Sucursal.estado == True
+        paralelo = db.query(Paralelo).filter(
+            Paralelo.id == data.get("paralelo_id"),
+            Paralelo.estado == True
         ).first()
 
-        if not sucursal:
-            return jsonify({"error": "La sucursal indicada no existe"}), 404
+        if not paralelo:
+            return jsonify({"error": "El paralelo indicado no existe"}), 404
 
-        hora_apertura = datetime.strptime(data.get("hora_apertura"), "%H:%M").time()
-        hora_cierre = datetime.strptime(data.get("hora_cierre"), "%H:%M").time()
+        hora_inicio = datetime.strptime(data.get("hora_inicio"), "%H:%M").time()
+        hora_fin = datetime.strptime(data.get("hora_fin"), "%H:%M").time()
 
-        if hora_apertura >= hora_cierre:
-            return jsonify({"error": "La hora de apertura debe ser menor que la hora de cierre"}), 400
+        if hora_inicio >= hora_fin:
+            return jsonify({"error": "La hora de inicio debe ser menor que la hora de fin"}), 400
 
         nuevo_horario = HorarioAtencion(
             dia=data.get("dia"),
-            hora_apertura=hora_apertura,
-            hora_cierre=hora_cierre,
-            sucursal_id=data.get("sucursal_id"),
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+            paralelo_id=data.get("paralelo_id"),
             estado=True
         )
 
@@ -65,17 +66,15 @@ def crear_horario():
         db.commit()
         db.refresh(nuevo_horario)
 
-        return jsonify({
-            "mensaje": "Horario creado correctamente",
-            "horario": {
-                "id": nuevo_horario.id,
-                "dia": nuevo_horario.dia,
-                "hora_apertura": str(nuevo_horario.hora_apertura),
-                "hora_cierre": str(nuevo_horario.hora_cierre),
-                "sucursal_id": nuevo_horario.sucursal_id,
-                "estado": nuevo_horario.estado
-            }
-        }), 201
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "CREAR",
+            "HORARIOS",
+            f"Se creó horario para el paralelo ID {nuevo_horario.paralelo_id}"
+        )
+
+        return jsonify({"mensaje": "Horario creado correctamente"}), 201
+
     except ValueError:
         return jsonify({"error": "Formato de hora inválido. Use HH:MM, ejemplo 08:00"}), 400
     except Exception as e:
@@ -100,9 +99,9 @@ def obtener_horario(id):
         return jsonify({
             "id": horario.id,
             "dia": horario.dia,
-            "hora_apertura": str(horario.hora_apertura),
-            "hora_cierre": str(horario.hora_cierre),
-            "sucursal_id": horario.sucursal_id,
+            "hora_inicio": str(horario.hora_inicio),
+            "hora_fin": str(horario.hora_fin),
+            "paralelo_id": horario.paralelo_id,
             "estado": horario.estado
         }), 200
     finally:
@@ -127,29 +126,37 @@ def actualizar_horario(id):
         if data.get("dia"):
             horario.dia = data.get("dia")
 
-        if data.get("hora_apertura"):
-            horario.hora_apertura = datetime.strptime(data.get("hora_apertura"), "%H:%M").time()
+        if data.get("hora_inicio"):
+            horario.hora_inicio = datetime.strptime(data.get("hora_inicio"), "%H:%M").time()
 
-        if data.get("hora_cierre"):
-            horario.hora_cierre = datetime.strptime(data.get("hora_cierre"), "%H:%M").time()
+        if data.get("hora_fin"):
+            horario.hora_fin = datetime.strptime(data.get("hora_fin"), "%H:%M").time()
 
-        if horario.hora_apertura >= horario.hora_cierre:
-            return jsonify({"error": "La hora de apertura debe ser menor que la hora de cierre"}), 400
+        if horario.hora_inicio >= horario.hora_fin:
+            return jsonify({"error": "La hora de inicio debe ser menor que la hora de fin"}), 400
 
-        if data.get("sucursal_id"):
-            sucursal = db.query(Sucursal).filter(
-                Sucursal.id == data.get("sucursal_id"),
-                Sucursal.estado == True
+        if data.get("paralelo_id"):
+            paralelo = db.query(Paralelo).filter(
+                Paralelo.id == data.get("paralelo_id"),
+                Paralelo.estado == True
             ).first()
 
-            if not sucursal:
-                return jsonify({"error": "La sucursal indicada no existe"}), 404
+            if not paralelo:
+                return jsonify({"error": "El paralelo indicado no existe"}), 404
 
-            horario.sucursal_id = data.get("sucursal_id")
+            horario.paralelo_id = data.get("paralelo_id")
 
         db.commit()
 
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ACTUALIZAR",
+            "HORARIOS",
+            f"Se actualizó el horario con ID {id}"
+        )
+
         return jsonify({"mensaje": "Horario actualizado correctamente"}), 200
+
     except ValueError:
         return jsonify({"error": "Formato de hora inválido. Use HH:MM, ejemplo 08:00"}), 400
     except Exception as e:
@@ -175,7 +182,15 @@ def eliminar_horario(id):
         horario.estado = False
         db.commit()
 
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "ELIMINAR",
+            "HORARIOS",
+            f"Se eliminó lógicamente el horario con ID {id}"
+        )
+
         return jsonify({"mensaje": "Horario eliminado correctamente"}), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500

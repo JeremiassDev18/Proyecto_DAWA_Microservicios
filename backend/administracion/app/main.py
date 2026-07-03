@@ -1,31 +1,46 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 from app.database import Base, engine
-from app.routes.restaurantes import restaurantes_bp
-from app.routes.sucursales import sucursales_bp
-from app.routes.mesas import mesas_bp
+from app.routes.facultades import facultades_bp
+from app.routes.carreras import carreras_bp
+from app.routes.asignaturas import asignaturas_bp
+from app.routes.periodos import periodos_bp
+from app.routes.docentes import docentes_bp
+from app.routes.estudiantes import estudiantes_bp
+from app.routes.paralelos import paralelos_bp
 from app.routes.horarios import horarios_bp
-from app.routes.promociones import promociones_bp
+from app.routes.dashboard import dashboard_bp
+from app.routes.reportes import reportes_bp
+
+load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
 app = Flask(__name__)
 CORS(app)
 
-app.register_blueprint(restaurantes_bp, url_prefix="/api/administracion/restaurantes")
-app.register_blueprint(sucursales_bp, url_prefix="/api/administracion/sucursales")
-app.register_blueprint(mesas_bp, url_prefix="/api/administracion/mesas")
+app.register_blueprint(facultades_bp, url_prefix="/api/administracion/facultades")
+app.register_blueprint(carreras_bp, url_prefix="/api/administracion/carreras")
+app.register_blueprint(asignaturas_bp, url_prefix="/api/administracion/asignaturas")
+app.register_blueprint(periodos_bp, url_prefix="/api/administracion/periodos")
+app.register_blueprint(docentes_bp, url_prefix="/api/administracion/docentes")
+app.register_blueprint(estudiantes_bp, url_prefix="/api/administracion/estudiantes")
+app.register_blueprint(paralelos_bp, url_prefix="/api/administracion/paralelos")
 app.register_blueprint(horarios_bp, url_prefix="/api/administracion/horarios")
-app.register_blueprint(promociones_bp, url_prefix="/api/administracion/promociones")
+app.register_blueprint(dashboard_bp, url_prefix="/api/administracion/dashboard")
+app.register_blueprint(reportes_bp, url_prefix="/api/administracion/reportes")
 
 
 @app.route("/")
 def home():
     return jsonify({
-        "mensaje": "Microservicio de Administracion funcionando correctamente"
+        "mensaje": "Microservicio de Administracion Academica funcionando correctamente"
     })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    port = int(os.getenv("PORT", 5002))
+    app.run(host="0.0.0.0", port=port, debug=True)
