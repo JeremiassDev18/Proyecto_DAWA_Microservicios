@@ -14,15 +14,44 @@ def listar_facultades():
         facultades = db.query(Facultad).filter(Facultad.estado == True).all()
 
         resultado = []
+
         for facultad in facultades:
             resultado.append({
                 "id": facultad.id,
                 "nombre": facultad.nombre,
+                "codigo": facultad.codigo,
                 "descripcion": facultad.descripcion,
-                "estado": facultad.estado
+                "estado": facultad.estado,
+                "fecha_creacion": str(facultad.fecha_creacion)
             })
 
         return jsonify(resultado), 200
+
+    finally:
+        db.close()
+
+
+@facultades_bp.route("/<int:id>", methods=["GET"])
+def obtener_facultad(id):
+    db = SessionLocal()
+    try:
+        facultad = db.query(Facultad).filter(
+            Facultad.id == id,
+            Facultad.estado == True
+        ).first()
+
+        if not facultad:
+            return jsonify({"error": "Facultad no encontrada"}), 404
+
+        return jsonify({
+            "id": facultad.id,
+            "nombre": facultad.nombre,
+            "codigo": facultad.codigo,
+            "descripcion": facultad.descripcion,
+            "estado": facultad.estado,
+            "fecha_creacion": str(facultad.fecha_creacion)
+        }), 200
+
     finally:
         db.close()
 
@@ -33,12 +62,16 @@ def crear_facultad():
     data = request.get_json()
 
     if not data or not data.get("nombre"):
-        return jsonify({"error": "El nombre de la facultad es obligatorio"}), 400
+        return jsonify({
+            "error": "El nombre de la facultad es obligatorio"
+        }), 400
 
     db = SessionLocal()
+
     try:
         nueva_facultad = Facultad(
             nombre=data.get("nombre"),
+            codigo=data.get("codigo"),
             descripcion=data.get("descripcion"),
             estado=True
         )
@@ -59,35 +92,17 @@ def crear_facultad():
             "facultad": {
                 "id": nueva_facultad.id,
                 "nombre": nueva_facultad.nombre,
+                "codigo": nueva_facultad.codigo,
                 "descripcion": nueva_facultad.descripcion,
-                "estado": nueva_facultad.estado
+                "estado": nueva_facultad.estado,
+                "fecha_creacion": str(nueva_facultad.fecha_creacion)
             }
         }), 201
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
-    finally:
-        db.close()
 
-
-@facultades_bp.route("/<int:id>", methods=["GET"])
-def obtener_facultad(id):
-    db = SessionLocal()
-    try:
-        facultad = db.query(Facultad).filter(
-            Facultad.id == id,
-            Facultad.estado == True
-        ).first()
-
-        if not facultad:
-            return jsonify({"error": "Facultad no encontrada"}), 404
-
-        return jsonify({
-            "id": facultad.id,
-            "nombre": facultad.nombre,
-            "descripcion": facultad.descripcion,
-            "estado": facultad.estado
-        }), 200
     finally:
         db.close()
 
@@ -98,6 +113,7 @@ def actualizar_facultad(id):
     data = request.get_json()
 
     db = SessionLocal()
+
     try:
         facultad = db.query(Facultad).filter(
             Facultad.id == id,
@@ -108,6 +124,7 @@ def actualizar_facultad(id):
             return jsonify({"error": "Facultad no encontrada"}), 404
 
         facultad.nombre = data.get("nombre", facultad.nombre)
+        facultad.codigo = data.get("codigo", facultad.codigo)
         facultad.descripcion = data.get("descripcion", facultad.descripcion)
 
         db.commit()
@@ -119,10 +136,14 @@ def actualizar_facultad(id):
             f"Se actualizó la facultad con ID {id}"
         )
 
-        return jsonify({"mensaje": "Facultad actualizada correctamente"}), 200
+        return jsonify({
+            "mensaje": "Facultad actualizada correctamente"
+        }), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
 
@@ -131,6 +152,7 @@ def actualizar_facultad(id):
 @requiere_roles(["admin", "administrador"])
 def eliminar_facultad(id):
     db = SessionLocal()
+
     try:
         facultad = db.query(Facultad).filter(
             Facultad.id == id,
@@ -141,18 +163,23 @@ def eliminar_facultad(id):
             return jsonify({"error": "Facultad no encontrada"}), 404
 
         facultad.estado = False
+
         db.commit()
 
         registrar_auditoria(
             request.headers.get("X-User-Id"),
             "ELIMINAR",
             "FACULTADES",
-            f"Se eliminó lógicamente la facultad con ID {id}"
+            f"Se inactivó la facultad con ID {id}"
         )
 
-        return jsonify({"mensaje": "Facultad eliminada correctamente"}), 200
+        return jsonify({
+            "mensaje": "Facultad inactivada correctamente"
+        }), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()

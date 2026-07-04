@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
-from app.models import Docente
+from app.models import Docente, Facultad
 from app.auth import requiere_roles
 from app.audit import registrar_auditoria
 
@@ -22,48 +22,13 @@ def listar_docentes():
                 "correo": docente.correo,
                 "telefono": docente.telefono,
                 "especialidad": docente.especialidad,
-                "estado": docente.estado
+                "facultad_id": docente.facultad_id,
+                "carga_horaria_maxima": docente.carga_horaria_maxima,
+                "estado": docente.estado,
+                "fecha_creacion": str(docente.fecha_creacion)
             })
 
         return jsonify(resultado), 200
-    finally:
-        db.close()
-
-
-@docentes_bp.route("/", methods=["POST"])
-@requiere_roles(["admin", "administrador"])
-def crear_docente():
-    data = request.get_json()
-
-    if not data or not data.get("nombres") or not data.get("apellidos") or not data.get("correo"):
-        return jsonify({"error": "Nombres, apellidos y correo son obligatorios"}), 400
-
-    db = SessionLocal()
-    try:
-        nuevo_docente = Docente(
-            nombres=data.get("nombres"),
-            apellidos=data.get("apellidos"),
-            correo=data.get("correo"),
-            telefono=data.get("telefono"),
-            especialidad=data.get("especialidad"),
-            estado=True
-        )
-
-        db.add(nuevo_docente)
-        db.commit()
-        db.refresh(nuevo_docente)
-
-        registrar_auditoria(
-            request.headers.get("X-User-Id"),
-            "CREAR",
-            "DOCENTES",
-            f"Se creó el docente {nuevo_docente.nombres} {nuevo_docente.apellidos}"
-        )
-
-        return jsonify({"mensaje": "Docente creado correctamente"}), 201
-    except Exception as e:
-        db.rollback()
-        return jsonify({"error": str(e)}), 500
     finally:
         db.close()
 
@@ -87,8 +52,78 @@ def obtener_docente(id):
             "correo": docente.correo,
             "telefono": docente.telefono,
             "especialidad": docente.especialidad,
-            "estado": docente.estado
+            "facultad_id": docente.facultad_id,
+            "carga_horaria_maxima": docente.carga_horaria_maxima,
+            "estado": docente.estado,
+            "fecha_creacion": str(docente.fecha_creacion)
         }), 200
+    finally:
+        db.close()
+
+
+@docentes_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
+def crear_docente():
+    data = request.get_json()
+
+    if not data or not data.get("nombres") or not data.get("apellidos") or not data.get("correo") or not data.get("facultad_id"):
+        return jsonify({
+            "error": "Nombres, apellidos, correo y facultad_id son obligatorios"
+        }), 400
+
+    db = SessionLocal()
+
+    try:
+        facultad = db.query(Facultad).filter(
+            Facultad.id == data.get("facultad_id"),
+            Facultad.estado == True
+        ).first()
+
+        if not facultad:
+            return jsonify({"error": "La facultad indicada no existe"}), 404
+
+        nuevo_docente = Docente(
+            nombres=data.get("nombres"),
+            apellidos=data.get("apellidos"),
+            correo=data.get("correo"),
+            telefono=data.get("telefono"),
+            especialidad=data.get("especialidad"),
+            facultad_id=data.get("facultad_id"),
+            carga_horaria_maxima=data.get("carga_horaria_maxima", 40),
+            estado=True
+        )
+
+        db.add(nuevo_docente)
+        db.commit()
+        db.refresh(nuevo_docente)
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "CREAR",
+            "DOCENTES",
+            f"Se creó el docente {nuevo_docente.nombres} {nuevo_docente.apellidos}"
+        )
+
+        return jsonify({
+            "mensaje": "Docente creado correctamente",
+            "docente": {
+                "id": nuevo_docente.id,
+                "nombres": nuevo_docente.nombres,
+                "apellidos": nuevo_docente.apellidos,
+                "correo": nuevo_docente.correo,
+                "telefono": nuevo_docente.telefono,
+                "especialidad": nuevo_docente.especialidad,
+                "facultad_id": nuevo_docente.facultad_id,
+                "carga_horaria_maxima": nuevo_docente.carga_horaria_maxima,
+                "estado": nuevo_docente.estado,
+                "fecha_creacion": str(nuevo_docente.fecha_creacion)
+            }
+        }), 201
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
 
@@ -99,6 +134,7 @@ def actualizar_docente(id):
     data = request.get_json()
 
     db = SessionLocal()
+
     try:
         docente = db.query(Docente).filter(
             Docente.id == id,
@@ -113,6 +149,21 @@ def actualizar_docente(id):
         docente.correo = data.get("correo", docente.correo)
         docente.telefono = data.get("telefono", docente.telefono)
         docente.especialidad = data.get("especialidad", docente.especialidad)
+        docente.carga_horaria_maxima = data.get(
+            "carga_horaria_maxima",
+            docente.carga_horaria_maxima
+        )
+
+        if data.get("facultad_id"):
+            facultad = db.query(Facultad).filter(
+                Facultad.id == data.get("facultad_id"),
+                Facultad.estado == True
+            ).first()
+
+            if not facultad:
+                return jsonify({"error": "La facultad indicada no existe"}), 404
+
+            docente.facultad_id = data.get("facultad_id")
 
         db.commit()
 
@@ -124,9 +175,11 @@ def actualizar_docente(id):
         )
 
         return jsonify({"mensaje": "Docente actualizado correctamente"}), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
 
@@ -135,6 +188,7 @@ def actualizar_docente(id):
 @requiere_roles(["admin", "administrador"])
 def eliminar_docente(id):
     db = SessionLocal()
+
     try:
         docente = db.query(Docente).filter(
             Docente.id == id,
@@ -151,12 +205,14 @@ def eliminar_docente(id):
             request.headers.get("X-User-Id"),
             "ELIMINAR",
             "DOCENTES",
-            f"Se eliminó lógicamente el docente con ID {id}"
+            f"Se inactivó el docente con ID {id}"
         )
 
-        return jsonify({"mensaje": "Docente eliminado correctamente"}), 200
+        return jsonify({"mensaje": "Docente inactivado correctamente"}), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()

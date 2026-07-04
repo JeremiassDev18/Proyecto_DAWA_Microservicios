@@ -9,10 +9,13 @@ class Facultad(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(150), nullable=False)
+    codigo = Column(String(20), unique=True)
     descripcion = Column(String(255))
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     carreras = relationship("Carrera", back_populates="facultad")
+    docentes = relationship("Docente", back_populates="facultad")
 
 
 class Carrera(Base):
@@ -20,28 +23,16 @@ class Carrera(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(150), nullable=False)
-    codigo = Column(String(20))
+    codigo = Column(String(20), unique=True)
+    modalidad = Column(String(50), nullable=False)
     facultad_id = Column(Integer, ForeignKey("facultades.id"), nullable=False)
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     facultad = relationship("Facultad", back_populates="carreras")
     asignaturas = relationship("Asignatura", back_populates="carrera")
     estudiantes = relationship("Estudiante", back_populates="carrera")
     paralelos = relationship("Paralelo", back_populates="carrera")
-
-
-class Asignatura(Base):
-    __tablename__ = "asignaturas"
-
-    id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(150), nullable=False)
-    codigo = Column(String(20))
-    creditos = Column(Integer, nullable=False)
-    carrera_id = Column(Integer, ForeignKey("carreras.id"), nullable=False)
-    estado = Column(Boolean, default=True)
-
-    carrera = relationship("Carrera", back_populates="asignaturas")
-    paralelos = relationship("Paralelo", back_populates="asignatura")
 
 
 class PeriodoAcademico(Base):
@@ -51,9 +42,31 @@ class PeriodoAcademico(Base):
     nombre = Column(String(100), nullable=False)
     fecha_inicio = Column(String(20), nullable=False)
     fecha_fin = Column(String(20), nullable=False)
+    estado_periodo = Column(String(20), default="planificado")
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
+    asignaturas = relationship("Asignatura", back_populates="periodo")
+    estudiantes = relationship("Estudiante", back_populates="periodo")
     paralelos = relationship("Paralelo", back_populates="periodo")
+
+
+class Asignatura(Base):
+    __tablename__ = "asignaturas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(150), nullable=False)
+    codigo = Column(String(20), unique=True)
+    creditos = Column(Integer, nullable=False)
+    nivel = Column(String(50))
+    carrera_id = Column(Integer, ForeignKey("carreras.id"), nullable=False)
+    periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
+    estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
+
+    carrera = relationship("Carrera", back_populates="asignaturas")
+    periodo = relationship("PeriodoAcademico", back_populates="asignaturas")
+    paralelos = relationship("Paralelo", back_populates="asignatura")
 
 
 class Docente(Base):
@@ -62,12 +75,17 @@ class Docente(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
-    correo = Column(String(120), nullable=False)
+    correo = Column(String(120), nullable=False, unique=True)
     telefono = Column(String(20))
     especialidad = Column(String(120))
+    facultad_id = Column(Integer, ForeignKey("facultades.id"), nullable=False)
+    carga_horaria_maxima = Column(Integer, default=40)
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
+    facultad = relationship("Facultad", back_populates="docentes")
     paralelos = relationship("Paralelo", back_populates="docente")
+    horarios = relationship("HorarioAtencion", back_populates="docente")
 
 
 class Estudiante(Base):
@@ -76,12 +94,16 @@ class Estudiante(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
-    correo = Column(String(120), nullable=False)
-    matricula = Column(String(30))
+    correo = Column(String(120), nullable=False, unique=True)
+    matricula = Column(String(30), unique=True)
     carrera_id = Column(Integer, ForeignKey("carreras.id"), nullable=False)
+    periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
+    estado_academico = Column(String(30), default="activo")
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     carrera = relationship("Carrera", back_populates="estudiantes")
+    periodo = relationship("PeriodoAcademico", back_populates="estudiantes")
 
 
 class Paralelo(Base):
@@ -94,25 +116,26 @@ class Paralelo(Base):
     docente_id = Column(Integer, ForeignKey("docentes.id"), nullable=False)
     periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     carrera = relationship("Carrera", back_populates="paralelos")
     asignatura = relationship("Asignatura", back_populates="paralelos")
     docente = relationship("Docente", back_populates="paralelos")
     periodo = relationship("PeriodoAcademico", back_populates="paralelos")
-    horarios = relationship("HorarioAtencion", back_populates="paralelo")
 
 
 class HorarioAtencion(Base):
     __tablename__ = "horarios_atencion"
 
     id = Column(Integer, primary_key=True, index=True)
+    docente_id = Column(Integer, ForeignKey("docentes.id"), nullable=False)
     dia = Column(String(20), nullable=False)
     hora_inicio = Column(Time, nullable=False)
     hora_fin = Column(Time, nullable=False)
-    paralelo_id = Column(Integer, ForeignKey("paralelos.id"), nullable=False)
     estado = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
-    paralelo = relationship("Paralelo", back_populates="horarios")
+    docente = relationship("Docente", back_populates="horarios")
 
 
 class AuditoriaAdministracion(Base):

@@ -14,6 +14,7 @@ from app.routes.paralelos import paralelos_bp
 from app.routes.horarios import horarios_bp
 from app.routes.dashboard import dashboard_bp
 from app.routes.reportes import reportes_bp
+from app.routes.internos import internos_bp
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ app.register_blueprint(paralelos_bp, url_prefix="/api/administracion/paralelos")
 app.register_blueprint(horarios_bp, url_prefix="/api/administracion/horarios")
 app.register_blueprint(dashboard_bp, url_prefix="/api/administracion/dashboard")
 app.register_blueprint(reportes_bp, url_prefix="/api/administracion/reportes")
+app.register_blueprint(internos_bp, url_prefix="/api/administracion/internos")
 
 
 @app.route("/")

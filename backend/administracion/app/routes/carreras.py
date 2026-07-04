@@ -19,55 +19,13 @@ def listar_carreras():
                 "id": carrera.id,
                 "nombre": carrera.nombre,
                 "codigo": carrera.codigo,
+                "modalidad": carrera.modalidad,
                 "facultad_id": carrera.facultad_id,
-                "estado": carrera.estado
+                "estado": carrera.estado,
+                "fecha_creacion": str(carrera.fecha_creacion)
             })
 
         return jsonify(resultado), 200
-    finally:
-        db.close()
-
-
-@carreras_bp.route("/", methods=["POST"])
-@requiere_roles(["admin", "administrador"])
-def crear_carrera():
-    data = request.get_json()
-
-    if not data or not data.get("nombre") or not data.get("facultad_id"):
-        return jsonify({"error": "Nombre y facultad_id son obligatorios"}), 400
-
-    db = SessionLocal()
-    try:
-        facultad = db.query(Facultad).filter(
-            Facultad.id == data.get("facultad_id"),
-            Facultad.estado == True
-        ).first()
-
-        if not facultad:
-            return jsonify({"error": "La facultad indicada no existe"}), 404
-
-        nueva_carrera = Carrera(
-            nombre=data.get("nombre"),
-            codigo=data.get("codigo"),
-            facultad_id=data.get("facultad_id"),
-            estado=True
-        )
-
-        db.add(nueva_carrera)
-        db.commit()
-        db.refresh(nueva_carrera)
-
-        registrar_auditoria(
-            request.headers.get("X-User-Id"),
-            "CREAR",
-            "CARRERAS",
-            f"Se creó la carrera {nueva_carrera.nombre}"
-        )
-
-        return jsonify({"mensaje": "Carrera creada correctamente"}), 201
-    except Exception as e:
-        db.rollback()
-        return jsonify({"error": str(e)}), 500
     finally:
         db.close()
 
@@ -88,9 +46,72 @@ def obtener_carrera(id):
             "id": carrera.id,
             "nombre": carrera.nombre,
             "codigo": carrera.codigo,
+            "modalidad": carrera.modalidad,
             "facultad_id": carrera.facultad_id,
-            "estado": carrera.estado
+            "estado": carrera.estado,
+            "fecha_creacion": str(carrera.fecha_creacion)
         }), 200
+    finally:
+        db.close()
+
+
+@carreras_bp.route("/", methods=["POST"])
+@requiere_roles(["admin", "administrador"])
+def crear_carrera():
+    data = request.get_json()
+
+    if not data or not data.get("nombre") or not data.get("modalidad") or not data.get("facultad_id"):
+        return jsonify({
+            "error": "Nombre, modalidad y facultad_id son obligatorios"
+        }), 400
+
+    db = SessionLocal()
+
+    try:
+        facultad = db.query(Facultad).filter(
+            Facultad.id == data.get("facultad_id"),
+            Facultad.estado == True
+        ).first()
+
+        if not facultad:
+            return jsonify({"error": "La facultad indicada no existe"}), 404
+
+        nueva_carrera = Carrera(
+            nombre=data.get("nombre"),
+            codigo=data.get("codigo"),
+            modalidad=data.get("modalidad"),
+            facultad_id=data.get("facultad_id"),
+            estado=True
+        )
+
+        db.add(nueva_carrera)
+        db.commit()
+        db.refresh(nueva_carrera)
+
+        registrar_auditoria(
+            request.headers.get("X-User-Id"),
+            "CREAR",
+            "CARRERAS",
+            f"Se creó la carrera {nueva_carrera.nombre}"
+        )
+
+        return jsonify({
+            "mensaje": "Carrera creada correctamente",
+            "carrera": {
+                "id": nueva_carrera.id,
+                "nombre": nueva_carrera.nombre,
+                "codigo": nueva_carrera.codigo,
+                "modalidad": nueva_carrera.modalidad,
+                "facultad_id": nueva_carrera.facultad_id,
+                "estado": nueva_carrera.estado,
+                "fecha_creacion": str(nueva_carrera.fecha_creacion)
+            }
+        }), 201
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
 
@@ -101,6 +122,7 @@ def actualizar_carrera(id):
     data = request.get_json()
 
     db = SessionLocal()
+
     try:
         carrera = db.query(Carrera).filter(
             Carrera.id == id,
@@ -112,6 +134,7 @@ def actualizar_carrera(id):
 
         carrera.nombre = data.get("nombre", carrera.nombre)
         carrera.codigo = data.get("codigo", carrera.codigo)
+        carrera.modalidad = data.get("modalidad", carrera.modalidad)
 
         if data.get("facultad_id"):
             facultad = db.query(Facultad).filter(
@@ -134,9 +157,11 @@ def actualizar_carrera(id):
         )
 
         return jsonify({"mensaje": "Carrera actualizada correctamente"}), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
 
@@ -145,6 +170,7 @@ def actualizar_carrera(id):
 @requiere_roles(["admin", "administrador"])
 def eliminar_carrera(id):
     db = SessionLocal()
+
     try:
         carrera = db.query(Carrera).filter(
             Carrera.id == id,
@@ -161,12 +187,14 @@ def eliminar_carrera(id):
             request.headers.get("X-User-Id"),
             "ELIMINAR",
             "CARRERAS",
-            f"Se eliminó lógicamente la carrera con ID {id}"
+            f"Se inactivó la carrera con ID {id}"
         )
 
-        return jsonify({"mensaje": "Carrera eliminada correctamente"}), 200
+        return jsonify({"mensaje": "Carrera inactivada correctamente"}), 200
+
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         db.close()
