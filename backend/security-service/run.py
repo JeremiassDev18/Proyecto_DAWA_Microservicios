@@ -52,7 +52,11 @@ def create_app() -> Flask:
         if not email or not password:
             return jsonify({"error": "Email y password son requeridos."}), 400
 
-        user = UserService.authenticate_user(email, password)
+        try:
+            user = UserService.authenticate_user(email, password)
+        except Exception as exc:
+            return jsonify({"error": "No se pudo validar las credenciales", "detail": str(exc)}), 500
+
         if not user:
             # Log failed login attempt
             try:
@@ -166,11 +170,15 @@ def create_app() -> Flask:
         if not email or not password or not nombre:
             return jsonify({"error": "Email, password y nombre son requeridos."}), 400
 
-        existing_user = UserService.get_user_by_email(email)
-        if existing_user:
-            return jsonify({"error": "El usuario ya existe."}), 409
+        try:
+            existing_user = UserService.get_user_by_email(email)
+            if existing_user:
+                return jsonify({"error": "El usuario ya existe."}), 409
 
-        user = UserService.create_user(email, password, nombre)
+            user = UserService.create_user(email, password, nombre)
+        except Exception as exc:
+            return jsonify({"error": "No se pudo completar la operación de registro", "detail": str(exc)}), 500
+
         return jsonify({"usuario": user}), 201
 
     @app.route("/usuarios", methods=["GET"])
@@ -275,16 +283,17 @@ def create_app() -> Flask:
     def protected_resource():
         return jsonify({"message": "Acceso autorizado"}), 200
 
+
     @app.route("/usuarios/<int:usuario_id>/cambiar-contrasena", methods=["POST"])
     @audit_log("change_password")
-    @authorize(required_roles=[], required_permissions=[])  # Any authenticated user can change their own password
+    @authorize(required_roles=[], required_permissions=[])  # cualquier usuario puede cambiar su propia contraseña, admin puede cambiar la de otros
     def change_password(usuario_id: int):
         """Change password endpoint. Users can only change their own password unless they're admin."""
-        # Get the current user ID from the token
+        # obtener el usuario actual desde g
         from flask import g
         current_user_id = getattr(g, "user_id", None)
         
-        # Allow users to change their own password, or admins to change anyone's
+        # revisar si el usuario actual es admin o si está cambiando su propia contraseña
         current_user_roles = getattr(g, "roles", [])
         if current_user_id != usuario_id and "admin" not in current_user_roles:
             return jsonify({"error": "No tienes permiso para cambiar esta contraseña"}), 403
@@ -304,21 +313,24 @@ def create_app() -> Flask:
         if len(new_password) < 8:
             return jsonify({"error": "La contraseña debe tener al menos 8 caracteres"}), 400
 
-        # Verify current password (unless it's an admin changing someone else's password)
+        # verificar la contraseña actual solo si el usuario está cambiando su propia contraseña
         if current_user_id == usuario_id:
             if not UserService.verify_current_password(usuario_id, current_password):
                 return jsonify({"error": "Contraseña actual incorrecta"}), 401
 
-        # Check user exists
+        # revisar si el usuario existe antes de cambiar la contraseña
         user = execute_query("SELECT id FROM usuarios WHERE id = %s", (usuario_id,), fetch_one=True)
         if not user:
             return jsonify({"error": "Usuario no encontrado"}), 404
 
-        # Change password
-        # attach audit detail about password change (no password content)
+        # cambiar la contraseña y registrar en la auditoria
+        # registrar el usuario cuyo password se está cambiando, no el que hace la acción (que puede ser admin)
         g.audit_details = {"target_user_id": usuario_id}
         UserService.change_password(usuario_id, new_password)
         return jsonify({"mensaje": "Contraseña actualizada exitosamente"}), 200
+
+
+
 
     @app.route("/usuarios/recuperar-contrasena", methods=["POST"])
     def request_password_reset():
@@ -329,19 +341,23 @@ def create_app() -> Flask:
         if not email:
             return jsonify({"error": "Email es requerido"}), 400
 
-        user = UserService.get_user_by_email(email)
+        try:
+            user = UserService.get_user_by_email(email)
+        except Exception as exc:
+            return jsonify({"error": "No se pudo procesar la solicitud de recuperación", "detail": str(exc)}), 500
+
         if not user:
-            # Return generic message for security (don't reveal if user exists)
             return jsonify({"mensaje": "Si el email existe, se enviará un enlace de recuperación"}), 200
 
-        # Generate reset token
-        reset_token = UserService.create_password_reset_token(user["id"])
         try:
+            reset_token = UserService.create_password_reset_token(user["id"])
             send_password_reset_email(user["email"], reset_token)
-        except Exception:
-            pass
+        except Exception as exc:
+            return jsonify({"error": "No se pudo enviar el correo de recuperación", "detail": str(exc)}), 500
 
         return jsonify({"mensaje": "Si el email existe, se enviará un enlace de recuperación"}), 200
+
+
 
     @app.route("/usuarios/resetear-contrasena", methods=["POST"])
     def reset_password_with_token():
@@ -360,17 +376,19 @@ def create_app() -> Flask:
         if len(new_password) < 8:
             return jsonify({"error": "La contraseña debe tener al menos 8 caracteres"}), 400
 
-        # Validate token
+        # Validar token
         reset_data = UserService.validate_password_reset_token(token)
         if not reset_data:
             return jsonify({"error": "Token inválido o expirado"}), 400
 
-        # Change password
+        # Cambiar la contraseña del usuario y marcar el token como usado
         usuario_id = reset_data["usuario_id"]
         UserService.change_password(usuario_id, new_password)
         UserService.mark_reset_token_as_used(token)
         
         return jsonify({"mensaje": "Contraseña actualizada exitosamente"}), 200
+
+
 
     @app.route("/logout", methods=["POST"])
     @authorize(required_roles=[], required_permissions=[])
@@ -382,13 +400,14 @@ def create_app() -> Flask:
         if not jti:
             return jsonify({"error": "Token inválido"}), 401
         
-        # Blacklist the token
         success = blacklist_token(jti, user_id, "logout")
         
         if success:
             return jsonify({"mensaje": "Sesión cerrada exitosamente"}), 200
         else:
             return jsonify({"error": "Error al cerrar sesión"}), 500
+
+
 
     @app.route("/logout-all", methods=["POST"])
     @authorize(required_roles=[], required_permissions=[])
@@ -406,6 +425,9 @@ def create_app() -> Flask:
             "revoked": revoked_count
         }), 200
 
+
+
+
     @app.route("/sessions/active", methods=["GET"])
     @authorize(required_roles=[], required_permissions=[])
     def get_active_sessions():
@@ -416,7 +438,7 @@ def create_app() -> Flask:
             return jsonify({"error": "Usuario no identificado"}), 401
         
         sessions = SessionService.get_active_sessions(user_id)
-        # normalize datetimes
+
         for s in (sessions or []):
             f = s.get("creado_en")
             if hasattr(f, "isoformat"):
@@ -468,8 +490,6 @@ def create_app() -> Flask:
         params.extend([limit, offset])
 
         results = execute_query(query, tuple(params), fetch_all=True)
-
-        # Normalize datetime to ISO strings
         for row in (results or []):
             f = row.get("fecha")
             if isinstance(f, datetime.datetime):

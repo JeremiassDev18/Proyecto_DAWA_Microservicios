@@ -5,6 +5,9 @@ from config import Config
 
 
 def send_password_reset_email(recipient_email: str, reset_token: str) -> None:
+    if not recipient_email:
+        raise ValueError("recipient_email es requerido")
+
     reset_url = f"{Config.RESET_PASSWORD_URL_BASE}?token={reset_token}"
     message = EmailMessage()
     message["Subject"] = "Recuperación de contraseña"
@@ -17,16 +20,19 @@ def send_password_reset_email(recipient_email: str, reset_token: str) -> None:
         "Saludos,\nEl equipo de seguridad"
     )
 
-    if Config.SMTP_USE_SSL:
-        smtp = smtplib.SMTP_SSL(Config.SMTP_HOST, Config.SMTP_PORT)
-    else:
-        smtp = smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT)
+    try:
+        if Config.SMTP_USE_SSL:
+            smtp = smtplib.SMTP_SSL(Config.SMTP_HOST, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT)
+        else:
+            smtp = smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT)
 
-    with smtp:
-        if Config.SMTP_USE_TLS and not Config.SMTP_USE_SSL:
-            smtp.starttls()
+        with smtp:
+            if Config.SMTP_USE_TLS and not Config.SMTP_USE_SSL:
+                smtp.starttls()
 
-        if Config.SMTP_USER and Config.SMTP_PASSWORD:
-            smtp.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
+            if Config.SMTP_USER and Config.SMTP_PASSWORD:
+                smtp.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
 
-        smtp.send_message(message)
+            smtp.send_message(message)
+    except Exception as exc:
+        raise RuntimeError(f"No se pudo enviar el correo de recuperación: {exc}") from exc

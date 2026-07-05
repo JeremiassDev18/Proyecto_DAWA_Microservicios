@@ -1,3 +1,4 @@
+import time
 import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
@@ -6,19 +7,31 @@ from config import Config
 connection_pool = None
 
 
-def init_db_pool(minconn: int = 1, maxconn: int = 10):
+def init_db_pool(minconn: int = 1, maxconn: int = 10, retries: int = 10, delay: int = 2):
     global connection_pool
-    if connection_pool is None:
-        connection_pool = psycopg2.pool.SimpleConnectionPool(
-            minconn,
-            maxconn,
-            database=Config.DB_NAME,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-        )
-    return connection_pool
+    if connection_pool is not None:
+        return connection_pool
+
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            connection_pool = psycopg2.pool.SimpleConnectionPool(
+                minconn,
+                maxconn,
+                database=Config.DB_NAME,
+                user=Config.DB_USER,
+                password=Config.DB_PASSWORD,
+                host=Config.DB_HOST,
+                port=Config.DB_PORT,
+            )
+            return connection_pool
+        except Exception as exc:  # pragma: no cover - depends on DB availability
+            last_error = exc
+            if attempt == retries:
+                raise
+            time.sleep(delay)
+
+    raise last_error
 
 
 def get_connection():
