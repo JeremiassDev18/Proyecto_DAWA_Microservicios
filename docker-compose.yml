@@ -1,0 +1,75 @@
+services:
+
+  chatbot-db:
+    image: pgvector/pgvector:pg16
+    container_name: chatbot-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: chatbotdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+
+    ports:
+      - "5435:5432"
+
+    volumes:
+      - chatbot-db-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    networks:
+      chatbot-network:
+        aliases:
+          - chatbot-db
+
+  chatbot-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: chatbot-service
+    restart: unless-stopped
+
+    depends_on:
+      - chatbot-db
+
+    ports:
+      - "5004:5004"
+
+    environment:
+      # Base de datos
+      DB_HOST: chatbot-db
+      DB_PORT: 5432
+      DB_NAME: chatbotdb
+      DB_USER: admin
+      DB_PASSWORD: admin123
+
+      # Estas URLs pueden quedarse así por ahora.
+      # No darán error hasta que tu aplicación intente consumirlas.
+      SECURITY_SERVICE_URL: http://security-service:5001
+      ADMIN_SERVICE_URL: http://administration-service:5002
+      RESERVATION_SERVICE_URL: http://reservation-service:5003
+
+      # Seguridad
+      INTERNAL_TOKEN: internal_secret_token_xyz
+
+      # IA
+      SIMILARITY_THRESHOLD: "0.25"
+      VECTOR_WEIGHT: "0.70"
+      TRGM_WEIGHT: "0.30"
+      MODEL_NAME: all-MiniLM-L6-v2
+
+    volumes:
+      - ./data:/app/data
+
+    networks:
+      chatbot-network:
+        aliases:
+          - chatbot-service
+
+volumes:
+  chatbot-db-data:
+
+networks:
+  chatbot-network:
+    driver: bridge
