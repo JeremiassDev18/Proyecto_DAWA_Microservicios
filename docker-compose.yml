@@ -1,0 +1,41 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - tutorias-network
+
+  tutorias-service:
+    build: .
+    container_name: tutorias-service
+    command: ["python", "-u", "backend/worker.py"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/app
+    networks:
+      - tutorias-network
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  tutorias-network:
+    driver: bridge
