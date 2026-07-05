@@ -38,4 +38,5 @@ volumes:
 
 networks:
   tutorias-network:
-    driver: bridge
+    external: true
+    name: tutorias-mesh
