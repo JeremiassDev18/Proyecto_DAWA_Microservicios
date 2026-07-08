@@ -12,6 +12,7 @@ build/
 .venv/
 venv/
 v/
+env/
 
 # === IDE / Editor ===
 .vscode/
@@ -37,6 +38,7 @@ scripts/data/
 # === Cache, logs, DB ===
 *.log
 .pytest_cache/
+.mypy_cache/
 .codegraph/
 *.db
 *.sqlite

@@ -13,3 +13,4 @@ tests
 .env
 *.log
 data/.cache/
+.mypy_cache/

@@ -1,22 +1,126 @@
 services:
 
+  # ── Administración Académica ──
+  postgres_admin:
+    image: postgres:16
+    container_name: postgres_admin
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: administracion_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d administracion_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_admin_data:/var/lib/postgresql/data
+      - ./backend/administracion/database:/docker-entrypoint-initdb.d
+    networks:
+      administration-network:
+        aliases:
+          - postgres_admin
+
+  administration-service:
+    build:
+      context: ./backend/administracion
+      dockerfile: Dockerfile
+    container_name: administration-service
+    restart: unless-stopped
+    depends_on:
+      postgres_admin:
+        condition: service_healthy
+    ports:
+      - "5002:5002"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres_admin:5432/administracion_db
+      PORT: "5002"
+    networks:
+      administration-network:
+        aliases:
+          - administration-service
+
+  # ── Tutorías (RabbitMQ + BD + Servicio) ──
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - tutorias-network
+
+  postgres_tutorias:
+    image: postgres:16
+    container_name: postgres_tutorias
+    environment:
+      POSTGRES_DB: tutorias_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_tutorias_data:/var/lib/postgresql/data
+      - ./database/init_tutorias.sql:/docker-entrypoint-initdb.d/init_tutorias.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tutorias-network
+
+  tutorias-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.tutorias
+    container_name: tutorias-service
+    command: ["python", "-u", "backend/worker.py"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres_tutorias:
+        condition: service_healthy
+    ports:
+      - "5003:5003"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      ADMINISTRACION_URL: http://administration-service:5002/api/administracion
+      DATABASE_URL_TUTORIAS: postgresql://postgres:password@postgres_tutorias:5432/tutorias_db
+      API_PORT: "5003"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/app
+    networks:
+      - tutorias-network
+
+  # ── Chatbot ──
   chatbot-db:
     image: pgvector/pgvector:pg16
     container_name: chatbot-db
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: chatbotdb
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: ${DB_PASSWORD:-admin123}
-
     ports:
       - "5435:5432"
-
     volumes:
       - chatbot-db-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
     networks:
       chatbot-network:
         aliases:
@@ -26,29 +130,21 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
     container_name: chatbot-service
     restart: unless-stopped
-
     depends_on:
       - chatbot-db
-
     ports:
       - "5004:5004"
-
     environment:
-      # Base de datos
       DB_HOST: chatbot-db
       DB_PORT: 5432
       DB_NAME: chatbotdb
       DB_USER: admin
       DB_PASSWORD: ${DB_PASSWORD:-admin123}
-
       SECURITY_SERVICE_URL: http://security-service:5001
       ADMIN_SERVICE_URL: http://administration-service:5002
       TUTORIAS_SERVICE_URL: http://tutorias-service:5003
-
-      # RabbitMQ (tutorias-service)
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
@@ -56,29 +152,31 @@ services:
       RABBITMQ_QUEUE_SOLICITUDES: tutorias.solicitudes
       RABBITMQ_QUEUE_EVENTOS: tutorias.eventos
       RABBITMQ_RESPONSE_TIMEOUT: 30
-
-      # Seguridad
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change_me_in_production}
-
-      # IA
       SIMILARITY_THRESHOLD: "0.25"
       VECTOR_WEIGHT: "0.70"
       TRGM_WEIGHT: "0.30"
       MODEL_NAME: all-MiniLM-L6-v2
-
     volumes:
       - ./data:/app/data
-
     networks:
       chatbot-network:
         aliases:
           - chatbot-service
 
 volumes:
+  postgres_admin_data:
+  rabbitmq_data:
+  postgres_tutorias_data:
   chatbot-db-data:
 
 networks:
+  administration-network:
+    external: true
+    name: tutorias-mesh
+  tutorias-network:
+    external: true
+    name: tutorias-mesh
   chatbot-network:
     external: true
     name: tutorias-mesh
-    
