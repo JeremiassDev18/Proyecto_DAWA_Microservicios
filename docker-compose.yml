@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: chatbotdb
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin123}
 
     ports:
       - "5435:5432"
@@ -42,16 +42,23 @@ services:
       DB_PORT: 5432
       DB_NAME: chatbotdb
       DB_USER: admin
-      DB_PASSWORD: admin123
+      DB_PASSWORD: ${DB_PASSWORD:-admin123}
 
-      # Estas URLs pueden quedarse así por ahora.
-      # No darán error hasta que tu aplicación intente consumirlas.
       SECURITY_SERVICE_URL: http://security-service:5001
       ADMIN_SERVICE_URL: http://administration-service:5002
-      RESERVATION_SERVICE_URL: http://reservation-service:5003
+      TUTORIAS_SERVICE_URL: http://tutorias-service:5003
+
+      # RabbitMQ (tutorias-service)
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      RABBITMQ_QUEUE_SOLICITUDES: tutorias.solicitudes
+      RABBITMQ_QUEUE_EVENTOS: tutorias.eventos
+      RABBITMQ_RESPONSE_TIMEOUT: 30
 
       # Seguridad
-      INTERNAL_TOKEN: internal_secret_token_xyz
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change_me_in_production}
 
       # IA
       SIMILARITY_THRESHOLD: "0.25"
@@ -72,4 +79,6 @@ volumes:
 
 networks:
   chatbot-network:
-    driver: bridge
+    external: true
+    name: tutorias-mesh
+    

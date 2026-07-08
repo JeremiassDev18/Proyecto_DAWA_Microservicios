@@ -15,6 +15,13 @@ class ChatResponse(BaseModel):
 class FeedbackResponse(BaseModel):
     id: int
     mensaje: str = "Feedback registrado"
+    already_exists: bool = False
+
+
+class FeedbackStatusResponse(BaseModel):
+    id_mensaje: int
+    feedback_exists: bool
+    fue_util: bool | None = None
 
 
 class PendingItem(BaseModel):
@@ -116,6 +123,35 @@ class UsageMetricsResponse(BaseModel):
     feedback_utiles: int
     feedback_no_utiles: int
     feedback_total: int
+
+
+class IntentResponse(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str | None
+    activo: bool
+    creado_en: datetime
+
+
+class IntentListResponse(BaseModel):
+    items: list[IntentResponse]
+    total: int
+
+
+class ResponseResponse(BaseModel):
+    id: int
+    id_intencion: int
+    intencion: str
+    respuesta_texto: str
+    tipo: str
+    prioridad: int
+    activa: bool
+    veces_usada: int
+
+
+class ResponseListResponse(BaseModel):
+    items: list[ResponseResponse]
+    total: int
 
 
 class ConversationSummary(BaseModel):

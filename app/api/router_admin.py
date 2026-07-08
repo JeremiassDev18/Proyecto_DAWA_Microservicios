@@ -11,7 +11,9 @@ from app.db import queries as db_queries
 from app.db.training_repository import get_training_data
 from app.controllers.dataset_controller import create_dataset
 from app.services.training_queue import enqueue_training, get_task_status
+from app.services.admin_sync_service import sync as sync_admin_data
 from app.utils.logger import logger
+from app.utils.pagination import paginate
 
 router = APIRouter(tags=["admin"])
 
@@ -41,6 +43,12 @@ def train(conn=Depends(get_db)):
     )
 
 
+@router.post("/internal/sync-admin-data")
+def run_sync_admin():
+    stats = sync_admin_data()
+    return stats
+
+
 @router.get("/train/status/{task_id}", response_model=TaskInfo)
 def training_status(task_id: int):
     task = get_task_status(task_id)
@@ -67,17 +75,23 @@ def _status_message(task: dict) -> str:
 
 
 @router.get("/pending", response_model=PendingList)
-def list_pending(resuelta: bool = False, conn=Depends(get_db)):
+def list_pending(
+    resuelta: bool = False,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    conn=Depends(get_db),
+):
     rows = db_queries.get_pendientes(conn, resuelta=resuelta)
+    paged, total = paginate(rows, page, page_size)
     items = [
         PendingItem(
             id=r[0], texto=r[1],
             intencion_sugerida=None,
             creado_en=r[3],
         )
-        for r in rows
+        for r in paged
     ]
-    return PendingList(pendientes=items, total=len(items))
+    return PendingList(pendientes=items, total=total)
 
 
 @router.get("/metrics/predictions", response_model=list[PredictionItem])
@@ -107,8 +121,14 @@ def model_metrics(conn=Depends(get_db)):
 
 
 @router.get("/modelos", response_model=list[ModelMetrics])
-def list_modelos(limit: int = 10, conn=Depends(get_db)):
+def list_modelos(
+    limit: int = Query(10, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    conn=Depends(get_db),
+):
     rows = db_queries.get_historial_modelos(conn, limit=limit)
+    paged, total = paginate(rows, page, page_size)
     return [
         ModelMetrics(
             nombre=r[1], version=r[2],
@@ -116,7 +136,7 @@ def list_modelos(limit: int = 10, conn=Depends(get_db)):
             recall=float(r[5]), f1_score=float(r[6]),
             activo=r[7],
         )
-        for r in rows
+        for r in paged
     ]
 
 
@@ -180,22 +200,35 @@ def list_conversation_summaries(
 
 
 def _generar_resumen(mensajes) -> str:
-    usuario_msgs = [m[2] for m in mensajes if m[1] == "usuario"]
-    bot_msgs = [m[2] for m in mensajes if m[1] == "bot"]
+    usuario_msgs = [m for m in mensajes if m[1] == "usuario"]
+    bot_msgs = [m for m in mensajes if m[1] == "bot"]
+
     partes = []
+    total = len(mensajes)
+
     if usuario_msgs:
-        partes.append(f"El usuario preguntó: {usuario_msgs[0][:100]}")
+        primera = usuario_msgs[0][2][:120]
+        partes.append(f"Pregunta: {primera}")
+
     if bot_msgs:
-        partes.append(f"El bot respondió: {bot_msgs[-1][:100]}")
-    return " -- ".join(partes) if partes else "Conversación sin contenido"
+        ultima = bot_msgs[-1]
+        ultima_respuesta = ultima[2][:120]
+        tipo_resol = ultima[3] if len(ultima) > 3 and ultima[3] else ""
+        partes.append(f"Respuesta: {ultima_respuesta}")
+        if tipo_resol:
+            partes.append(f"Tipo: {tipo_resol}")
+
+    confianzas = [float(m[5]) for m in bot_msgs if len(m) > 5 and m[5] is not None]
+    if confianzas:
+        conf_max = max(confianzas)
+        partes.append(f"Confianza: {conf_max:.0%}")
+
+    partes.append(f"Mensajes: {total}")
+
+    return " | ".join(partes) if partes else "Conversación sin contenido"
 
 
-def _next_version(existing_version: str | None) -> int:
-    import re
-    if not existing_version:
-        return 1
-    match = re.search(r"v(\d+)$", existing_version)
-    return int(match.group(1)) + 1 if match else 1
+
 
 
 @router.post("/pending/{id}/convert", response_model=PendingConvertResponse)

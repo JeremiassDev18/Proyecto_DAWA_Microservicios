@@ -32,7 +32,7 @@ El servicio expone endpoints REST en `/api/v1` y usa PostgreSQL con extensiones 
     - `predictor.py`: inferencia de intención y confianza.
   - `services/`: orquestación de respuesta.
     - `chat_orchestrator.py`: flujo principal de procesamiento de mensajes.
-    - `microservice_client.py`: emulación/resolución de intenciones externas.
+    - `security_client.py`, `admin_client.py`, `tutorias_client.py`: clientes reales para microservicios externos.
     - `rag_service.py`: búsqueda de documentos y creación de contexto.
   - `schemas/`: modelos Pydantic para request/response.
   - `utils/`: utilidades generales.
@@ -67,7 +67,7 @@ El servicio expone endpoints REST en `/api/v1` y usa PostgreSQL con extensiones 
    - predice intención usando `app/ml/predictor.py`.
    - guarda la predicción en `chatbot_prediccion`.
    - determina tipo de resolución:
-     - intentos de flujo externo (`EXTERNAL_INTENTS`) con `microservice_client.py`
+      - intentos de flujo externo (`EXTERNAL_INTENTS`) con `admin_client.py` y `tutorias_client.py`
      - respuesta directa por intención con `chatbot_respuesta`
      - búsqueda híbrida semántica + trigramas en `queries.search_hybrid`
      - fallback RAG en `rag_service.respond_with_documents`

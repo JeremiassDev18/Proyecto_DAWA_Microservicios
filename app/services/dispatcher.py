@@ -5,7 +5,7 @@ from app.utils.logger import logger
 def dispatch(conn, usuario_id: int, mensaje: str,
              intent: str, confidence: float) -> dict:
     for handler in HANDLER_CHAIN:
-        if not handler.can_handle(intent, confidence):
+        if not handler.can_handle(intent, confidence, mensaje):
             logger.info(f"Dispatcher: {handler.__class__.__name__} "
                         f"-> skip (can_handle=False para {intent})")
             continue

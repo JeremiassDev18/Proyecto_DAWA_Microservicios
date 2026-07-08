@@ -11,7 +11,7 @@ FAQ_INTENTS = {
 
 
 class FAQHandler(IntentHandler):
-    def can_handle(self, intent: str, confidence: float) -> bool:
+    def can_handle(self, intent: str, confidence: float, mensaje: str = "") -> bool:
         return (intent in FAQ_INTENTS
                 and confidence >= settings.CONFIDENCE_THRESHOLD
                 and intent != "SIN_INTENCION")

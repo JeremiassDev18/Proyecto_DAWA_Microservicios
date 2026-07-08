@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class IntentHandler(ABC):
     @abstractmethod
-    def can_handle(self, intent: str, confidence: float) -> bool:
+    def can_handle(self, intent: str, confidence: float, mensaje: str = "") -> bool:
         ...
 
     @abstractmethod

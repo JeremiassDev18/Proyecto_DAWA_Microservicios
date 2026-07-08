@@ -114,6 +114,42 @@ def create_intencion(conn, nombre: str, descripcion: str = "") -> int:
         return cur.fetchone()[0]
 
 
+def get_or_create_intencion(conn, nombre: str, descripcion: str = "") -> int:
+    row = get_intencion_by_nombre(conn, nombre)
+    if row:
+        return row[0]
+    try:
+        return create_intencion(conn, nombre, descripcion)
+    except Exception:
+        row = get_intencion_by_nombre(conn, nombre)
+        if row:
+            return row[0]
+        raise
+
+
+def update_intencion(conn, id: int, nombre: str, descripcion: str = "",
+                     activo: Optional[bool] = None):
+    with conn.cursor() as cur:
+        sql = "UPDATE chatbot_intencion SET nombre = %s, descripcion = %s"
+        params: list = [nombre, descripcion]
+        if activo is not None:
+            sql += ", activo = %s"
+            params.append(activo)
+        sql += " WHERE id = %s"
+        params.append(id)
+        cur.execute(sql, params)
+        conn.commit()
+
+
+def soft_delete_intencion(conn, id: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE chatbot_intencion SET activo = FALSE WHERE id = %s",
+            (id,),
+        )
+        conn.commit()
+
+
 # ── chatbot_dataset ────────────────────────────────────────────────────
 
 def get_all_dataset(conn):
@@ -223,12 +259,25 @@ def get_all_respuestas(conn):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT r.id, r.respuesta_texto, r.tipo, r.prioridad, "
-            "r.activa, r.veces_usada, i.nombre as intencion "
+            "r.activa, r.veces_usada, i.nombre as intencion, r.id_intencion "
             "FROM chatbot_respuesta r "
             "JOIN chatbot_intencion i ON r.id_intencion = i.id "
             "ORDER BY i.nombre, r.prioridad DESC"
         )
         return cur.fetchall()
+
+
+def get_respuesta_by_id(conn, id: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT r.id, r.respuesta_texto, r.tipo, r.prioridad, "
+            "r.activa, r.veces_usada, i.nombre as intencion, r.id_intencion "
+            "FROM chatbot_respuesta r "
+            "JOIN chatbot_intencion i ON r.id_intencion = i.id "
+            "WHERE r.id = %s",
+            (id,),
+        )
+        return cur.fetchone()
 
 
 def create_respuesta(conn, id_intencion: int, respuesta_texto: str,
@@ -243,6 +292,30 @@ def create_respuesta(conn, id_intencion: int, respuesta_texto: str,
         return cur.fetchone()[0]
 
 
+def update_respuesta(conn, id: int, respuesta_texto: str,
+                     tipo: str = "texto", prioridad: int = 1,
+                     activa: Optional[bool] = None):
+    with conn.cursor() as cur:
+        sql = "UPDATE chatbot_respuesta SET respuesta_texto = %s, tipo = %s, prioridad = %s"
+        params: list = [respuesta_texto, tipo, prioridad]
+        if activa is not None:
+            sql += ", activa = %s"
+            params.append(activa)
+        sql += " WHERE id = %s"
+        params.append(id)
+        cur.execute(sql, params)
+        conn.commit()
+
+
+def soft_delete_respuesta(conn, id: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE chatbot_respuesta SET activa = FALSE WHERE id = %s",
+            (id,),
+        )
+        conn.commit()
+
+
 def increment_veces_usada(conn, id_respuesta: int):
     with conn.cursor() as cur:
         cur.execute(
@@ -254,14 +327,25 @@ def increment_veces_usada(conn, id_respuesta: int):
 
 # ── chatbot_conversacion ───────────────────────────────────────────────
 
-def create_conversacion(conn, id_usuario: int) -> int:
+def create_conversacion(conn, id_usuario: int, nombre_cliente: str = "") -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO chatbot_conversacion (id_usuario) VALUES (%s) RETURNING id",
-            (id_usuario,),
+            "INSERT INTO chatbot_conversacion (id_usuario, nombre_cliente) "
+            "VALUES (%s, %s) RETURNING id",
+            (id_usuario, nombre_cliente or None),
         )
         conn.commit()
         return cur.fetchone()[0]
+
+
+def update_conversacion_nombre(conn, id_conversacion: int, nombre_cliente: str):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE chatbot_conversacion SET nombre_cliente = %s WHERE id = %s AND "
+            "(nombre_cliente IS NULL OR nombre_cliente = '')",
+            (nombre_cliente, id_conversacion),
+        )
+        conn.commit()
 
 
 def get_conversacion(conn, id_conversacion: int):
@@ -500,6 +584,16 @@ def soft_delete_documento(conn, id: int):
         conn.commit()
 
 
+def desactivar_documentos_por_fuente(conn, fuente: str):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE documento_base SET activo = FALSE, actualizado_en = NOW() "
+            "WHERE fuente = %s",
+            (fuente,),
+        )
+        conn.commit()
+
+
 def search_documentos(conn, embedding, categoria: Optional[str] = None,
                       limit: int = 3):
     with conn.cursor() as cur:
@@ -583,6 +677,19 @@ def count_pendientes_entrenamiento(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT COUNT(*) FROM entrenamiento_pendiente WHERE procesado = FALSE"
+        )
+        return cur.fetchone()[0]
+
+
+def count_nuevos_validados(conn) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM chatbot_dataset cd "
+            "WHERE cd.validado = TRUE AND cd.activo = TRUE "
+            "AND cd.creado_en > COALESCE("
+            "  (SELECT MAX(tr.fecha) FROM chatbot_training tr "
+            "   WHERE tr.estado = 'completado'), "
+            "  '1970-01-01'::timestamp)"
         )
         return cur.fetchone()[0]
 

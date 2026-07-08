@@ -21,11 +21,6 @@ def save_model_with_metrics(conn, nombre: str, version: str, metrics: dict) -> i
     return model_id
 
 
-def queue_new_examples(conn, dataset_ids: list[int]):
-    for ds_id in dataset_ids:
-        queries.encolar_entrenamiento(conn, ds_id)
-
-
 def record_training_run(conn, modelo_version: str, ejemplos_usados: int,
                         metrics: dict) -> int:
     training_id = queries.iniciar_training(conn, modelo_version)
@@ -40,15 +35,11 @@ def record_training_run(conn, modelo_version: str, ejemplos_usados: int,
     return training_id
 
 
-def count_pending_training(conn) -> int:
-    return queries.count_pendientes_entrenamiento(conn)
-
-
 def auto_train_if_needed(conn) -> bool:
     if not settings.AUTO_TRAIN:
         return False
-    pending = count_pending_training(conn)
-    if pending < settings.AUTO_TRAIN_THRESHOLD:
+    nuevos = queries.count_nuevos_validados(conn)
+    if nuevos < settings.AUTO_TRAIN_THRESHOLD:
         return False
 
     texts, labels = get_training_data(conn)

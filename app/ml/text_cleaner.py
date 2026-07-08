@@ -8,5 +8,4 @@ def clean_text(text: str) -> str:
     return text
 
 
-def clean_corpus(texts: list[str]) -> list[str]:
-    return [clean_text(t) for t in texts]
+

@@ -2,16 +2,19 @@ from fastapi import Header, HTTPException, Depends
 from typing import Optional
 
 from app.core.config import settings
-from app.services.microservice_client import validar_token
+from app.services.microservice_client import get_security_client
 
 INTERNAL_TOKEN = settings.INTERNAL_TOKEN
 
 
 class AuthContext:
-    def __init__(self, usuario_id: int, tipo: str, token: str):
+    def __init__(self, usuario_id: int, tipo: str, token: str,
+                 nombre: str = "", email: str = ""):
         self.usuario_id = usuario_id
         self.tipo = tipo
         self.token = token
+        self.nombre = nombre
+        self.email = email
 
     @property
     def es_admin(self) -> bool:
@@ -31,12 +34,15 @@ def verificar_token(authorization: Optional[str] = Header(None)) -> AuthContext:
     if token == INTERNAL_TOKEN:
         return AuthContext(usuario_id=0, tipo="admin", token=token)
 
-    user = validar_token(token)
+    client = get_security_client()
+    user = client.validar_token(token)
     if user and user.get("valido"):
         return AuthContext(
             usuario_id=user["usuario_id"],
             tipo=user.get("tipo", "estudiante"),
             token=token,
+            nombre=user.get("nombre", ""),
+            email=user.get("email", ""),
         )
 
     raise HTTPException(status_code=401, detail="Token inválido o expirado")

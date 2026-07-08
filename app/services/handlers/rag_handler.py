@@ -4,12 +4,14 @@ from app.utils.logger import logger
 
 
 class RAGHandler(IntentHandler):
-    def can_handle(self, intent: str, confidence: float) -> bool:
+    def can_handle(self, intent: str, confidence: float, mensaje: str = "") -> bool:
+        if intent == "SIN_INTENCION":
+            return False
         return True
 
     def handle(self, conn, usuario_id: int, mensaje: str,
                intent: str, confidence: float) -> dict | None:
-        context = respond_with_documents(conn, mensaje)
+        context = respond_with_documents(conn, mensaje, intent=intent)
         if not context:
             return None
 

@@ -8,7 +8,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.postgres_client import init_pool, get_connection, release_connection
-from app.ml.vectorizer import generate_embedding, update_embedding_in_db
+from app.db import queries
+from app.ml.vectorizer import generate_embedding
 
 def main():
     init_pool()
@@ -22,7 +23,7 @@ def main():
             for pid, texto in rows:
                 print(f"Generando embedding para pregunta ID {pid}...")
                 emb = generate_embedding(texto)
-                update_embedding_in_db(conn, pid, emb)
+                queries.update_embedding(conn, pid, emb)
             print("✅ Todos los embeddings han sido generados y guardados.")
     finally:
         release_connection(conn)

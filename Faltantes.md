@@ -51,7 +51,7 @@ Este documento resume los requerimientos del `Alcance.md` que no están cubierto
 ## 3. Integración y orquestación de microservicios
 
 ### Comunicación con microservicios de administración y tutorías
-- Estado actual: `app/services/microservice_client.py` usa datos mock en lugar de llamadas reales.
+- ✅ Completado: `app/services/security_client.py`, `admin_client.py`, `tutorias_client.py` clientes reales.
 - Falta implementar:
   - Conexión real a Microservicio de Administración Académica para obtener asignaturas, docentes y disponibilidad.
   - Conexión real a Microservicio de Tutorías para el estado de solicitudes.

@@ -6,6 +6,7 @@ from app.core.auth import requerir_admin
 from app.schemas.requests import DocumentCreate, DocumentUpdate
 from app.schemas.responses import DocumentListResponse, DocumentResponse
 from app.utils.logger import logger
+from app.utils.pagination import paginate
 
 router = APIRouter(tags=["documents"])
 
@@ -15,11 +16,14 @@ def list_documents(
     query: str = Query("", description="Search by title or content"),
     categoria: str = Query("", description="Filter by category"),
     activo: bool | None = Query(None, description="Filter by active status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     conn=Depends(get_db),
     _auth=Depends(requerir_admin),
 ):
     items = ctrl.list_documents(conn, texto_query=query, categoria=categoria, activo=activo)
-    return DocumentListResponse(items=[DocumentResponse(**i) for i in items], total=len(items))
+    paged, total = paginate(items, page, page_size)
+    return DocumentListResponse(items=[DocumentResponse(**i) for i in paged], total=total)
 
 
 @router.get("/documents/{id}", response_model=DocumentResponse)

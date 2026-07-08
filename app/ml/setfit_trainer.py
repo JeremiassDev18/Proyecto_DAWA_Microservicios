@@ -31,6 +31,7 @@ def train_model(texts: list[str], labels: list[str]) -> dict:
     args = setfit.TrainingArguments(
         num_epochs=5,
         batch_size=16,
+        num_iterations=20,
     )
     trainer = setfit.Trainer(
         model=model,

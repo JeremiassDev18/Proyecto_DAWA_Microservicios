@@ -28,6 +28,12 @@ data/*.npy
 data/*.npz
 !data/.gitkeep
 
+# === Model weights ===
+*.safetensors
+
+# === Script data ===
+scripts/data/
+
 # === Cache, logs, DB ===
 *.log
 .pytest_cache/

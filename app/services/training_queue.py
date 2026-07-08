@@ -23,7 +23,7 @@ def _run_training(task_id: int, texts: list[str], labels: list[str]):
     try:
         from app.ml.setfit_trainer import train_model
         from app.db import queries
-        from app.api.router_admin import _next_version
+        from app.utils.version import next_version
         from app.db.training_repository import save_model_with_metrics, record_training_run
 
         metrics = train_model(texts, labels)
@@ -38,7 +38,7 @@ def _run_training(task_id: int, texts: list[str], labels: list[str]):
 
         active = queries.get_modelo_activo(conn)
         prev_version = active[2] if active else None
-        version = _next_version(prev_version)
+        version = next_version(prev_version)
         version_str = f"setfit-v{version}"
 
         save_model_with_metrics(conn, "setfit", version_str, metrics)

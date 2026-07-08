@@ -19,12 +19,4 @@ def generate_embedding(text: str) -> list[float]:
     return model.encode(cleaned).tolist()
 
 
-def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
-    model = _get_model()
-    cleaned = [clean_text(t) for t in texts]
-    return model.encode(cleaned).tolist()
 
-
-def update_embedding_in_db(conn, record_id: int, embedding: list[float]):
-    from app.db.queries import update_embedding
-    update_embedding(conn, record_id, embedding)

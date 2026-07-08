@@ -4,7 +4,7 @@ from app.utils.logger import logger
 
 
 class HybridHandler(IntentHandler):
-    def can_handle(self, intent: str, confidence: float) -> bool:
+    def can_handle(self, intent: str, confidence: float, mensaje: str = "") -> bool:
         return True
 
     def handle(self, conn, usuario_id: int, mensaje: str,

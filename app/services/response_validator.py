@@ -13,10 +13,17 @@ SCOPE_KEYWORDS = [
     "matrícula", "matricula", "examen", "nota",
     "reglamento", "cancelación", "cancelacion",
     "solicitud", "faq", "reglamento",
+    "carrera", "perfil", "estudiante",
+    "información", "informacion",
+    "facultad", "periodo",
+    "académico", "academico",
+    "correo", "datos",
 ]
 
 
-def validar_respuesta(texto: str, mensaje_usuario: str) -> tuple[bool, Optional[str]]:
+def validar_respuesta(texto: str, mensaje_usuario: str, intent: str = "") -> tuple[bool, Optional[str]]:
+    if intent == "CONSULTAR_PERFIL":
+        return True, None
     if not texto:
         return True, None
 

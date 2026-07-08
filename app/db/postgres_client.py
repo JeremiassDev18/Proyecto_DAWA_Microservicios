@@ -20,6 +20,9 @@ def get_connection():
 
 
 def release_connection(conn):
+    global pool
+    if pool is None:
+        return
     pool.putconn(conn)
 
 

@@ -9,10 +9,19 @@ class Settings(BaseSettings):
     DB_USER: str = "admin"
     DB_PASSWORD: str = "admin123"
 
-    # URLs microservicios
+    # URLs microservicios HTTP
     SECURITY_SERVICE_URL: str = "http://security-service:5001"
     ADMIN_SERVICE_URL: str = "http://administration-service:5002"
-    RESERVATION_SERVICE_URL: str = "http://reservation-service:5003"
+    TUTORIAS_SERVICE_URL: str = "http://tutorias-service:5003"
+
+    # RabbitMQ (tutorias-service comandos vía AMQP)
+    RABBITMQ_HOST: str = "localhost"
+    RABBITMQ_PORT: int = 5672
+    RABBITMQ_USER: str = "guest"
+    RABBITMQ_PASS: str = "guest"
+    RABBITMQ_QUEUE_SOLICITUDES: str = "tutorias.solicitudes"
+    RABBITMQ_QUEUE_EVENTOS: str = "tutorias.eventos"
+    RABBITMQ_RESPONSE_TIMEOUT: int = 30
 
     # Seguridad interna
     INTERNAL_TOKEN: str = "internal_secret_token_xyz"
@@ -33,7 +42,7 @@ class Settings(BaseSettings):
 
     # RAG
     RAG_TOP_K: int = 3
-    RAG_SIMILARITY_THRESHOLD: float = 0.25
+    RAG_SIMILARITY_THRESHOLD: float = 0.35
     RAG_HIGH_CONFIDENCE: float = 0.35
 
     @property

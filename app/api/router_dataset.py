@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers import dataset_controller as ctrl
 from app.core.dependencies import get_db
+from app.core.auth import requerir_admin
 from app.schemas.requests import DatasetCreate, DatasetUpdate
 from app.schemas.responses import DatasetListResponse, DatasetResponse
 from app.utils.logger import logger
+from app.utils.pagination import paginate
 
 router = APIRouter(tags=["dataset"])
 
@@ -14,21 +16,24 @@ def list_dataset(
     query: str = Query("", description="Search by text"),
     intencion: str = Query("", description="Filter by intent name"),
     activo: bool | None = Query(None, description="Filter by active status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     conn=Depends(get_db),
 ):
     items = ctrl.list_dataset(conn, texto_query=query, intencion=intencion, activo=activo)
-    return DatasetListResponse(items=[DatasetResponse(**i) for i in items], total=len(items))
+    paged, total = paginate(items, page, page_size)
+    return DatasetListResponse(items=[DatasetResponse(**i) for i in paged], total=total)
 
 
 @router.post("/dataset", response_model=DatasetResponse, status_code=201)
-def create_dataset(req: DatasetCreate, conn=Depends(get_db)):
+def create_dataset(req: DatasetCreate, conn=Depends(get_db), _auth=Depends(requerir_admin)):
     item = ctrl.create_dataset(conn, req.texto, req.id_intencion, req.origen)
     logger.info(f"Dataset creado id={item['id']}: {req.texto[:50]}...")
     return DatasetResponse(**item)
 
 
 @router.put("/dataset/{id}", response_model=DatasetResponse)
-def update_dataset(id: int, req: DatasetUpdate, conn=Depends(get_db)):
+def update_dataset(id: int, req: DatasetUpdate, conn=Depends(get_db), _auth=Depends(requerir_admin)):
     item = ctrl.update_dataset(conn, id, req.texto, req.id_intencion)
     if item is None:
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
@@ -37,7 +42,7 @@ def update_dataset(id: int, req: DatasetUpdate, conn=Depends(get_db)):
 
 
 @router.delete("/dataset/{id}")
-def delete_dataset(id: int, conn=Depends(get_db)):
+def delete_dataset(id: int, conn=Depends(get_db), _auth=Depends(requerir_admin)):
     ok = ctrl.delete_dataset(conn, id)
     if not ok:
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
@@ -45,7 +50,7 @@ def delete_dataset(id: int, conn=Depends(get_db)):
 
 
 @router.patch("/dataset/{id}/validar", response_model=DatasetResponse)
-def validate_dataset(id: int, conn=Depends(get_db)):
+def validate_dataset(id: int, conn=Depends(get_db), _auth=Depends(requerir_admin)):
     item = ctrl.validate_dataset(conn, id)
     if item is None:
         raise HTTPException(status_code=404, detail="Dataset no encontrado")

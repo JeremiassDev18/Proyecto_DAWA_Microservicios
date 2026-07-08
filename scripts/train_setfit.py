@@ -1,21 +1,12 @@
 import sys
 import os
-import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.postgres_client import init_pool, get_connection, release_connection
 from app.db.training_repository import get_training_data, save_model_with_metrics, record_training_run
 from app.db.queries import get_modelo_activo
 from app.ml.setfit_trainer import train_model
-
-
-def _next_version(existing_version: str | None) -> int:
-    if not existing_version:
-        return 1
-    match = re.search(r"v(\d+)$", existing_version)
-    if match:
-        return int(match.group(1)) + 1
-    return 1
+from app.utils.version import next_version
 
 
 def main():
@@ -32,7 +23,7 @@ def main():
         print(f"Métricas: {metrics}")
 
         active = get_modelo_activo(conn)
-        version = _next_version(active[2] if active else None)
+        version = next_version(active[2] if active else None)
         version_str = f"setfit-v{version}"
 
         model_id = save_model_with_metrics(conn, "setfit", version_str, metrics)

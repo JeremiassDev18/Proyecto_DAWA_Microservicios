@@ -112,7 +112,7 @@ CREATE TABLE chatbot_mensaje (
     id_conversacion     INT REFERENCES chatbot_conversacion(id),
     rol                 VARCHAR(10) CHECK (rol IN ('usuario', 'bot')),
     contenido           TEXT NOT NULL,
-    tipo_resolucion     VARCHAR(20) CHECK (tipo_resolucion IN ('estatica', 'dinamica', 'logica', 'sin_respuesta')),
+    tipo_resolucion     VARCHAR(20) CHECK (tipo_resolucion IN ('estatica', 'dinamica', 'logica', 'sin_respuesta', 'saludo', 'hibrida')),
     respondido_por_ia   BOOLEAN DEFAULT FALSE,
     score_similitud     NUMERIC(5,4),
     id_intencion        INT REFERENCES chatbot_intencion(id),
@@ -199,6 +199,7 @@ CREATE TABLE chatbot_training (
 -- ============================================================
 
 INSERT INTO chatbot_intencion (nombre, descripcion) VALUES
+('CONSULTAR_PERFIL',      'El estudiante consulta su propio perfil, carrera, datos personales'),
 ('CREAR_SOLICITUD',       'El estudiante quiere crear una nueva solicitud de tutoría'),
 ('CANCELAR_SOLICITUD',    'El estudiante desea cancelar una tutoría existente'),
 ('CAMBIAR_HORARIO',       'El estudiante quiere reprogramar una tutoría'),
@@ -391,7 +392,7 @@ INSERT INTO chatbot_dataset (id_intencion, texto, validado, origen) VALUES
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'ESCALAR_DOCENTE'), 'Quiero presentar una queja sobre mi tutor', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'ESCALAR_DOCENTE'), 'Necesito una reunión con el jefe de departamento', TRUE, 'manual'),
 
--- RESUMEN_SOLICITUD (10)
+-- RESUMEN_SOLICITUD (14)
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Resumen de mis tutorías', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), '¿Cuántas tutorías he tenido?', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Ver bitácora de tutorías', TRUE, 'manual'),
@@ -402,6 +403,10 @@ INSERT INTO chatbot_dataset (id_intencion, texto, validado, origen) VALUES
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Resumen semanal de mis tutorías', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), '¿Qué temas he cubierto en tutorías?', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Necesito un reporte de asistencia a tutorías', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Consultar bitácora de tutorías', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), '¿Qué se vio en mi última tutoría?', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Mostrar observaciones de mis sesiones de tutoría', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'RESUMEN_SOLICITUD'), 'Cómo fue mi última tutoría', TRUE, 'manual'),
 
 -- SIN_INTENCION (8)
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Hola', TRUE, 'manual'),
@@ -445,6 +450,30 @@ INSERT INTO chatbot_dataset (id_intencion, texto, validado, origen) VALUES
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cuánto es 2 más 2', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Qué día es hoy', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quién descubrió América', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'me gusta la musica', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Me gusta el fútbol', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Me gusta leer libros', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Me gusta viajar', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Me gusta programar', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Estoy bien gracias', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Todo bien por aquí', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Aquí estoy', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Solo pasaba', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Nada nuevo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Todo tranquilo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Un gusto', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Mucho gusto', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Encantado', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Qué haces', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'En qué andas', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Qué hay de nuevo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Solo quería saludar', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Un saludo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Saludos a todos', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Bonito día', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Linda tarde', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Buena noche', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Qué bonito lugar', TRUE, 'manual'),
 
 -- SOLICITAR_TUTORIA (adicionales hasta ~50)
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'SOLICITAR_TUTORIA'), 'Busco un tutor particular', TRUE, 'manual'),
@@ -500,7 +529,7 @@ INSERT INTO chatbot_dataset (id_intencion, texto, validado, origen) VALUES
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Ver historial de tutorías', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Cuántas tutorías tengo este mes', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Tutorías registradas este ciclo', TRUE, 'manual'),
-((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Consultar bitácora de tutorías', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Ver el estado de mis tutorías', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Revisar tutorías programadas', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Estado de mis solicitudes de tutoría', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Ver si tengo tutorías activas', TRUE, 'manual'),
@@ -653,7 +682,97 @@ INSERT INTO chatbot_dataset (id_intencion, texto, validado, origen) VALUES
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Disponibilidad de tutores de Álgebra Lineal', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Docentes de Programación disponibles', TRUE, 'manual'),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Hay tutor de Estadística disponible', TRUE, 'manual'),
-((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Quién puede dar tutorías de Base de Datos', TRUE, 'manual');
+((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Quién puede dar tutorías de Base de Datos', TRUE, 'manual'),
+
+-- CONSULTAR_PERFIL
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Quiero ver mi perfil de estudiante', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Dime mi información personal', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), '¿Cuál es mi carrera?', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Qué carrera estudio', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Muéstrame mis datos', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Quiero saber qué carrera estoy cursando', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Dime mi correo institucional', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Cuál es mi matrícula', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Necesito mi información académica', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Mi perfil académico por favor', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Dime a qué carrera pertenezco', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Quiero consultar mis datos personales', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Información del estudiante', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Ver perfil', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'A qué facultad pertenezco', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Datos de mi cuenta de estudiante', TRUE, 'manual'),
+
+-- CONSULTAR_FAQ (adicionales — carreras/facultades)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), '¿Qué carreras existen?', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), '¿Qué facultades tiene la universidad?', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué carreras ofrece la universidad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Cuáles son las facultades disponibles', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué carreras hay disponibles', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué facultades existen', TRUE, 'manual'),
+
+-- CONSULTAR_ASIGNATURA (adicionales — nivel/materia)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_ASIGNATURA'), 'En qué nivel veo Base de Datos', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_ASIGNATURA'), 'Qué nivel tengo en Estructura de Datos', TRUE, 'manual'),
+
+-- BUSCAR_DOCENTE (adicionales — nombres y posesivos)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCENTE'), 'Muéstrame los docentes', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCENTE'), 'Muéstrame los profesores', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCENTE'), 'Dime los docentes', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCENTE'), 'Buscar docente Carlos', TRUE, 'manual'),
+
+-- CONSULTAR_FAQ (adicionales — 15 ejemplos carreras/facultades genéricas)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Cuántas carreras hay en la universidad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Lista de carreras disponibles', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Cuáles son todas las facultades', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué carreras puedo estudiar', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Dime las carreras que ofrece la universidad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Nombres de las facultades', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué carreras tiene la Facultad de Ingeniería', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Cuántas facultades existen', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Las carreras de la universidad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Información sobre las carreras', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué opciones de carrera tengo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Cuáles son las facultades de la universidad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Qué carreras hay en la Facultad de Ciencias', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Muéstrame las carreras disponibles', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_FAQ'), 'Quisiera saber qué carreras existen', TRUE, 'manual'),
+
+-- CONSULTAR_PERFIL (adicionales — materias posesivas)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Dime mis materias', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Cuáles son mis materias', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Qué materias tengo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Muéstrame mis materias', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Quiero ver las materias que curso', TRUE, 'manual'),
+
+-- SIN_INTENCION (adicionales — fuera de dominio)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quiero comprar una pizza', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cómo está el clima', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quién ganó el mundial', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Qué hora es', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cuéntame un chiste', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cómo cocinar arroz', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quién es Messi', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Comprar un celular', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Recomiéndame una película', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cómo instalar Windows', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quién escribió Cien Años de Soledad', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Dónde queda Machu Picchu', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cómo hacer ejercicio', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quiero un préstamo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Cuál es mi signo zodiacal', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Recomiéndame un libro', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'SIN_INTENCION'), 'Quién descubrió América', TRUE, 'manual'),
+
+-- CREAR_SOLICITUD (adicionales — subir confianza)
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Registrar una tutoría', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Necesito ayuda con una materia', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Quiero agendar una tutoría', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Inscribirme en tutorías', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Pedir una tutoría académica', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Solicitar apoyo en matemáticas', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Necesito clases de refuerzo', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Agendar cita con un tutor', TRUE, 'manual'),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CREAR_SOLICITUD'), 'Registrar solicitud de tutoría', TRUE, 'manual');
 
 -- ---- Respuestas para cada intención (ejemplos) ----
 INSERT INTO chatbot_respuesta (id_intencion, respuesta_texto, tipo, prioridad) VALUES
@@ -662,6 +781,8 @@ INSERT INTO chatbot_respuesta (id_intencion, respuesta_texto, tipo, prioridad) V
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_MIS_TUTORIAS'), 'Estoy consultando tus tutorías registradas...', 'texto', 1),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'HORARIO_TUTORIAS'), 'Las tutorías se realizan en horario académico regular, de lunes a viernes de 8:00 a 18:00. Algunas también están disponibles en modalidad virtual.', 'texto', 1),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'HORARIO_TUTORIAS'), 'Puedes consultar los horarios disponibles en el sistema académico.', 'texto', 1),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Estoy consultando tus datos de estudiante...', 'accion', 1),
+((SELECT id FROM chatbot_intencion WHERE nombre = 'CONSULTAR_PERFIL'), 'Veo tu información académica...', 'texto', 2),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'CONTACTAR_DOCENTE'), 'Puedes contactar al docente a través del sistema de mensajería interna o solicitar sus datos de contacto en la secretaría académica.', 'texto', 1),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Te recomiendo al docente más adecuado para esa asignatura.', 'texto', 1),
 ((SELECT id FROM chatbot_intencion WHERE nombre = 'DISPONIBILIDAD_DOCENTE'), 'Los docentes disponibles para esa área son...', 'texto', 1),
@@ -918,10 +1039,10 @@ JOIN chatbot_intencion i ON i.id = cd.id_intencion
 WHERE ep.procesado = FALSE;
 
 -- ============================================================
--- Migración: separar intents transaccionales de documentales
+-- Migración: intents transaccionales agrupados
 -- ============================================================
 
--- 1. Fusionar CONTACTAR_DOCENTE y DISPONIBILIDAD_DOCENTE en BUSCAR_DOCENTE
+-- Fusionar CONTACTAR_DOCENTE y DISPONIBILIDAD_DOCENTE en BUSCAR_DOCENTE
 UPDATE chatbot_dataset cd
 SET id_intencion = (SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCENTE')
 WHERE cd.id_intencion IN (
@@ -934,16 +1055,4 @@ SET id_intencion = (SELECT id FROM chatbot_intencion WHERE nombre = 'BUSCAR_DOCE
 WHERE cr.id_intencion IN (
     SELECT id FROM chatbot_intencion
     WHERE nombre IN ('CONTACTAR_DOCENTE', 'DISPONIBILIDAD_DOCENTE')
-);
-
-UPDATE chatbot_intencion SET activo = FALSE
-WHERE nombre IN ('CONTACTAR_DOCENTE', 'DISPONIBILIDAD_DOCENTE');
-
--- 2. Desactivar intents documentales (respondidas vía RAG, no SetFit)
-UPDATE chatbot_intencion SET activo = FALSE
-WHERE nombre IN (
-    'CONSULTAR_REGLAMENTO',
-    'CONSULTAR_FAQ',
-    'CONSULTAR_ASIGNATURA',
-    'HORARIO_TUTORIAS'
 );
