@@ -19,6 +19,7 @@ def create_app() -> Flask:
     app.config["JSON_SORT_KEYS"] = False
 
     CORS(app)
+    init_db_pool()
     app.register_blueprint(permission_bp)
 
     @app.before_request
@@ -194,6 +195,28 @@ def create_app() -> Flask:
         if not user:
             return jsonify({"error": "Usuario no encontrado"}), 404
         return jsonify({"usuario": user}), 200
+
+    @app.route("/usuarios/me", methods=["GET"])
+    def get_current_user():
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token requerido"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = decode_token(token)
+        except Exception as exc:
+            return jsonify({"error": "Token inválido", "detail": str(exc)}), 401
+        usuario_id = payload.get("id") or payload.get("sub")
+        if not usuario_id:
+            return jsonify({"error": "Token no contiene usuario"}), 401
+        user = UserService.get_user_by_id(usuario_id)
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        user_roles = UserService.get_user_roles(usuario_id)
+        user_permissions = UserService.get_user_permissions(usuario_id)
+        user["roles"] = user_roles
+        user["permissions"] = user_permissions
+        return jsonify(user), 200
 
     @app.route("/usuarios/<int:usuario_id>", methods=["PUT"])
     @audit_log("update_user")
