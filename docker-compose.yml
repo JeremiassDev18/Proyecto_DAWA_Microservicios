@@ -18,6 +18,26 @@ services:
     networks:
       - tutorias-network
 
+  postgres_tutorias:
+    image: postgres:16
+    container_name: postgres_tutorias
+    environment:
+      POSTGRES_DB: tutorias_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_tutorias_data:/var/lib/postgresql/data
+      - ./database/init_tutorias.sql:/docker-entrypoint-initdb.d/init_tutorias.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tutorias-network
+
   tutorias-service:
     build: .
     container_name: tutorias-service
@@ -25,8 +45,15 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      postgres_tutorias:
+        condition: service_healthy
+    ports:
+      - "5003:5003"
     environment:
       RABBITMQ_HOST: rabbitmq
+      ADMINISTRACION_URL: http://administration-service:5002/api/administracion
+      DATABASE_URL_TUTORIAS: postgresql://postgres:password@postgres_tutorias:5432/tutorias_db
+      API_PORT: "5003"
       PYTHONUNBUFFERED: "1"
     volumes:
       - .:/app
@@ -35,6 +62,7 @@ services:
 
 volumes:
   rabbitmq_data:
+  postgres_tutorias_data:
 
 networks:
   tutorias-network:

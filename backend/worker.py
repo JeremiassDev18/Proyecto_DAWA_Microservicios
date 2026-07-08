@@ -10,9 +10,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from backend.tutorias_service.service import TutoriasService
+    from backend.tutorias_service.database import Base, engine, SessionLocal
+    from backend.administracion_client import AdministracionClient
+    from backend.api import start_api_thread
 except ImportError:
-    # Intenta importar directamente si no funciona el anterior
     from tutorias_service.service import TutoriasService
+    from tutorias_service.database import Base, engine, SessionLocal
+    from administracion_client import AdministracionClient
+    from api import start_api_thread
 
 # Configurar logging
 logging.basicConfig(
@@ -23,10 +28,19 @@ logger = logging.getLogger(__name__)
 
 
 class TutoriasWorker:
-    def __init__(self, rabbitmq_host=None):
+    def __init__(self, rabbitmq_host=None, administracion_url=None):
         if rabbitmq_host is None:
             rabbitmq_host = os.getenv('RABBITMQ_HOST', 'localhost')
-        self.service = TutoriasService()
+        if administracion_url is None:
+            administracion_url = os.getenv('ADMINISTRACION_URL')
+
+        Base.metadata.create_all(bind=engine)
+
+        admin_client = AdministracionClient(base_url=administracion_url) if administracion_url else None
+        self.service = TutoriasService(
+            db_session_factory=SessionLocal,
+            admin_client=admin_client,
+        )
         self.rabbitmq_host = rabbitmq_host
         self.connection = None
         self.channel = None
@@ -89,16 +103,19 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.registrar_solicitud_tutoria(
                 estudiante_id=data['estudiante_id'],
-                carrera=data['carrera'],
+                asignatura_id=data.get('asignatura_id'),
+                periodo_id=data.get('periodo_id'),
                 tema=data['tema'],
-                fecha_solicitud=data['fecha_solicitud'],
-                hora_solicitud=data['hora_solicitud']
+                fecha_solicitud=data.get('fecha_solicitud'),
+                fecha_agendada=data.get('fecha_agendada'),
             )
             self.publish_event('tutoria_solicitada', resultado)
             logger.info(f"Solicitud registrada: {resultado['id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error registrando solicitud: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_validar_disponibilidad(self, message):
         """TUT-R02: Validación de disponibilidad docente"""
@@ -115,9 +132,11 @@ class TutoriasWorker:
             }
             self.publish_event('disponibilidad_validada', resultado)
             logger.info(f"Disponibilidad validada: {resultado}")
+            return resultado
         except Exception as e:
             logger.error(f"Error validando disponibilidad: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_registrar_docente(self, message):
         """Registrar docente"""
@@ -130,9 +149,11 @@ class TutoriasWorker:
             )
             self.publish_event('docente_registrado', resultado)
             logger.info(f"Docente registrado: {resultado['id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error registrando docente: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_asignar_tutoria(self, message):
         """TUT-R03: Asignación de tutorías a docentes"""
@@ -140,17 +161,21 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.asignar_tutoria(
                 tutoria_id=data['tutoria_id'],
-                docente_id=data['docente_id']
+                docente_id=data['docente_id'],
+                usuario_id=data.get('usuario_id'),
             )
             if resultado['asignada']:
                 self.publish_event('tutoria_asignada', resultado)
                 logger.info(f"Tutoría asignada: {data['tutoria_id']}")
+                return resultado
             else:
                 self.publish_event('asignacion_rechazada', resultado)
                 logger.warning(f"Asignación rechazada: {resultado['motivo']}")
+                return resultado
         except Exception as e:
             logger.error(f"Error asignando tutoría: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_confirmar_tutoria(self, message):
         """TUT-R04: Confirmación de tutorías"""
@@ -159,13 +184,17 @@ class TutoriasWorker:
             resultado = self.service.confirmar_o_cancelar_tutoria(
                 tutoria_id=data['tutoria_id'],
                 accion='confirmar',
-                motivo=data.get('motivo')
+                motivo=data.get('motivo'),
+                usuario_id=data.get('usuario_id'),
+                rol_usuario=data.get('rol_usuario'),
             )
             self.publish_event('tutoria_confirmada', resultado)
             logger.info(f"Tutoría confirmada: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error confirmando tutoría: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_cancelar_tutoria(self, message):
         """TUT-R04: Cancelación de tutorías"""
@@ -174,13 +203,17 @@ class TutoriasWorker:
             resultado = self.service.confirmar_o_cancelar_tutoria(
                 tutoria_id=data['tutoria_id'],
                 accion='cancelar',
-                motivo=data.get('motivo')
+                motivo=data.get('motivo'),
+                usuario_id=data.get('usuario_id'),
+                rol_usuario=data.get('rol_usuario'),
             )
             self.publish_event('tutoria_cancelada', resultado)
             logger.info(f"Tutoría cancelada: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error cancelando tutoría: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_registrar_asistencia(self, message):
         """TUT-R05: Registro de asistencia del estudiante"""
@@ -188,13 +221,16 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.registrar_asistencia_estudiante(
                 tutoria_id=data['tutoria_id'],
-                asistio=data['asistio']
+                asistio=data['asistio'],
+                usuario_id=data.get('usuario_id'),
             )
             self.publish_event('asistencia_registrada', resultado)
             logger.info(f"Asistencia registrada: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error registrando asistencia: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_registrar_bitacora(self, message):
         """TUT-R06: Registro de bitácora de atención"""
@@ -202,13 +238,17 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.registrar_bitacora_atencion(
                 tutoria_id=data['tutoria_id'],
-                detalle=data['detalle']
+                detalle=data['detalle'],
+                temas_detectados=data.get('temas_detectados'),
+                usuario_id=data.get('usuario_id'),
             )
             self.publish_event('bitacora_registrada', resultado)
             logger.info(f"Bitácora registrada: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error registrando bitácora: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_gestionar_estado(self, message):
         """TUT-R07: Gestión de estados de la tutoría"""
@@ -216,13 +256,18 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.gestionar_estado_tutoria(
                 tutoria_id=data['tutoria_id'],
-                estado=data['estado']
+                estado=data['estado'],
+                usuario_id=data.get('usuario_id'),
+                rol_usuario=data.get('rol_usuario'),
+                comentario=data.get('comentario'),
             )
             self.publish_event('estado_gestionado', resultado)
             logger.info(f"Estado gestionado: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error gestionando estado: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_registrar_caso_academico(self, message):
         """TUT-R08: Seguimiento de casos académicos"""
@@ -235,42 +280,72 @@ class TutoriasWorker:
             )
             self.publish_event('caso_academico_registrado', resultado)
             logger.info(f"Caso académico registrado: {resultado['id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error registrando caso académico: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_reporte_docente(self, message):
         """TUT-R09: Reporte de tutorías por docente"""
         try:
             data = message['datos']
             resultado = self.service.generar_reporte_tutorias_por_docente(
-                docente_id=data['docente_id']
+                docente_id=data['docente_id'],
+                periodo_id=data.get('periodo_id'),
             )
             self.publish_event('reporte_docente_generado', resultado)
             logger.info(f"Reporte de docente generado: {data['docente_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error generando reporte de docente: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_reporte_estudiantes(self, message):
         """TUT-R10: Reporte de estudiantes atendidos"""
         try:
-            resultado = self.service.generar_reporte_estudiantes_atendidos()
+            data = message.get('datos', {})
+            resultado = self.service.generar_reporte_estudiantes_atendidos(
+                periodo_id=data.get('periodo_id'),
+            )
             self.publish_event('reporte_estudiantes_generado', resultado)
             logger.info("Reporte de estudiantes generado")
+            return resultado
         except Exception as e:
             logger.error(f"Error generando reporte de estudiantes: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_reporte_temas(self, message):
         """TUT-R11: Reporte de temas académicos recurrentes"""
         try:
-            resultado = self.service.generar_reporte_temas_recurrentes()
+            data = message.get('datos', {})
+            resultado = self.service.generar_reporte_temas_recurrentes(
+                periodo_id=data.get('periodo_id'),
+            )
             self.publish_event('reporte_temas_generado', resultado)
             logger.info("Reporte de temas generado")
+            return resultado
         except Exception as e:
             logger.error(f"Error generando reporte de temas: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_consultar_mis_tutorias(self, message):
+        """Consultar tutorías de un estudiante"""
+        try:
+            data = message['datos']
+            resultado = self.service.consultar_tutorias_por_estudiante(
+                estudiante_id=data['estudiante_id'],
+                periodo_id=data.get('periodo_id'),
+            )
+            logger.info(f"Tutorías consultadas para estudiante {data['estudiante_id']}: {len(resultado)} encontradas")
+            return resultado
+        except Exception as e:
+            logger.error(f"Error consultando tutorías: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def handle_notificar_cambio(self, message):
         """TUT-R12: Notificaciones internas sobre cambios de estado"""
@@ -278,13 +353,17 @@ class TutoriasWorker:
             data = message['datos']
             resultado = self.service.notificar_cambio_estado(
                 tutoria_id=data['tutoria_id'],
-                estado=data['estado']
+                estado=data['estado'],
+                destinatario_id=data.get('destinatario_id'),
+                destinatario_rol=data.get('destinatario_rol', 'estudiante'),
             )
             self.publish_event('cambio_notificado', resultado)
             logger.info(f"Notificación enviada: {data['tutoria_id']}")
+            return resultado
         except Exception as e:
             logger.error(f"Error notificando cambio: {e}")
             self.publish_event('error', {'mensaje': str(e)})
+            raise
 
     def process_message(self, ch, method, properties, body):
         """Procesar mensaje recibido"""
@@ -309,24 +388,52 @@ class TutoriasWorker:
                 'reporte_docente': self.handle_reporte_docente,
                 'reporte_estudiantes': self.handle_reporte_estudiantes,
                 'reporte_temas': self.handle_reporte_temas,
+                'consultar_mis_tutorias': self.handle_consultar_mis_tutorias,
                 'notificar_cambio': self.handle_notificar_cambio,
             }
             
             handler = handlers.get(event_type)
+            resultado = None
             if handler:
-                handler(message)
+                resultado = handler(message)
             else:
                 logger.warning(f"Evento desconocido: {event_type}")
             
             ch.basic_ack(delivery_tag=method.delivery_tag)
+            
+            # Responder al RPC si el mensaje trae reply_to
+            if properties.reply_to:
+                response = json.dumps({
+                    "estado": "ok",
+                    "datos": resultado
+                }).encode()
+                ch.basic_publish(
+                    exchange='',
+                    routing_key=properties.reply_to,
+                    properties=pika.BasicProperties(
+                        correlation_id=properties.correlation_id
+                    ),
+                    body=response
+                )
+                logger.info(f"Respuesta RPC enviada a {properties.reply_to}")
         except Exception as e:
             logger.error(f"Error procesando mensaje: {e}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            if properties and properties.reply_to:
+                ch.basic_publish(
+                    exchange='',
+                    routing_key=properties.reply_to,
+                    properties=pika.BasicProperties(
+                        correlation_id=properties.correlation_id
+                    ),
+                    body=json.dumps({"estado": "error", "mensaje": str(e)}).encode()
+                )
 
     def start(self):
-        """Iniciar el worker"""
+        """Iniciar el worker y la API REST"""
         try:
             logger.info("Iniciando worker de tutorias...")
+            start_api_thread(self.service)
             self.channel.basic_qos(prefetch_count=1)
             self.channel.basic_consume(
                 queue='tutorias.solicitudes',

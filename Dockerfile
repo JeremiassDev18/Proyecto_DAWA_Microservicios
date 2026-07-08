@@ -5,6 +5,6 @@ WORKDIR /app
 COPY . /app
 
 RUN python -m pip install --no-cache-dir --upgrade pip && \
-    python -m pip install --no-cache-dir pika
+    python -m pip install --no-cache-dir pika requests flask flask-cors sqlalchemy psycopg2-binary
 
 CMD ["python", "-u", "backend/worker.py"]
