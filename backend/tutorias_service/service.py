@@ -553,6 +553,36 @@ class TutoriasService:
         finally:
             db.close()
 
+    def consultar_mis_bitacoras(self, estudiante_id: int | str) -> List[Dict[str, object]]:
+        db = self._get_db()
+        try:
+            resultados = (
+                db.query(SolicitudTutoria, BitacoraAtencion)
+                .join(BitacoraAtencion, BitacoraAtencion.solicitud_id == SolicitudTutoria.id)
+                .filter(SolicitudTutoria.estudiante_id == int(estudiante_id))
+                .all()
+            )
+            return [
+                {
+                    "solicitud_id": s.id,
+                    "codigo": str(s.id),
+                    "tema": s.tema,
+                    "estado": s.estado,
+                    "docente_id": s.docente_id,
+                    "asignatura_id": s.asignatura_id,
+                    "periodo_id": s.periodo_id,
+                    "bitacora_id": b.id,
+                    "observaciones": b.observaciones,
+                    "asistio": b.asistio,
+                    "temas_detectados": b.temas_detectados,
+                    "fecha_registro": b.fecha_registro.isoformat() if b.fecha_registro else None,
+                    "fecha_solicitud": s.fecha_solicitud.isoformat() if s.fecha_solicitud else None,
+                }
+                for s, b in resultados
+            ]
+        finally:
+            db.close()
+
     def consultar_notificaciones(
         self,
         destinatario_id: int | str,

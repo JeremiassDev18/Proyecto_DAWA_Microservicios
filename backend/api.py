@@ -276,6 +276,17 @@ def create_app(service: Any) -> Flask:
             logger.error(f"Error generando reporte por docente: {e}")
             return jsonify({"error": str(e)}), 500
 
+    # ── Chatbot: Bitácoras de un estudiante con JOIN ──
+
+    @app.route("/api/tutorias/estudiantes/<estudiante_id>/bitacoras", methods=["GET"])
+    def mis_bitacoras(estudiante_id: str):
+        try:
+            resultado = service.consultar_mis_bitacoras(estudiante_id)
+            return jsonify({"cantidad": len(resultado), "bitacoras": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error consultando bitácoras del estudiante {estudiante_id}: {e}")
+            return jsonify({"error": str(e)}), 500
+
     # ── TUT-R10: Reporte estudiantes atendidos ──
 
     @app.route("/api/tutorias/reportes/estudiantes-atendidos", methods=["GET"])
