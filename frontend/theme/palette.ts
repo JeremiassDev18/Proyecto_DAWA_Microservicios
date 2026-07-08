@@ -1,0 +1,68 @@
+export const palette = {
+  primary: {
+    main: '#2563eb',
+    light: '#60a5fa',
+    dark: '#1d4ed8',
+    contrastText: '#ffffff',
+  },
+  secondary: {
+    main: '#7c3aed',
+    light: '#a78bfa',
+    dark: '#5b21b6',
+    contrastText: '#ffffff',
+  },
+  success: {
+    main: '#16a34a',
+    light: '#86efac',
+    dark: '#15803d',
+    contrastText: '#ffffff',
+  },
+  warning: {
+    main: '#d97706',
+    light: '#fde68a',
+    dark: '#b45309',
+    contrastText: '#ffffff',
+  },
+  error: {
+    main: '#dc2626',
+    light: '#fca5a5',
+    dark: '#b91c1c',
+    contrastText: '#ffffff',
+  },
+  info: {
+    main: '#0284c7',
+    light: '#7dd3fc',
+    dark: '#0369a1',
+    contrastText: '#ffffff',
+  },
+  grey: {
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1e293b',
+    900: '#0f172a',
+  },
+  background: {
+    default: '#f8fafc',
+    paper: '#ffffff',
+    card: '#ffffff',
+  },
+  text: {
+    primary: '#0f172a',
+    secondary: '#475569',
+    disabled: '#94a3b8',
+  },
+  divider: '#e2e8f0',
+  action: {
+    active: '#64748b',
+    hover: '#f1f5f9',
+    selected: '#eff6ff',
+    disabled: '#cbd5e1',
+    focus: '#dbeafe',
+  },
+}

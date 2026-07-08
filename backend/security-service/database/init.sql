@@ -134,3 +134,39 @@ FROM roles r
 JOIN permisos p ON p.nombre_permiso = 'read_reports'
 WHERE r.nombre_rol IN ('admin', 'manager', 'viewer')
 ON CONFLICT DO NOTHING;
+
+-- Roles del dominio académico
+INSERT INTO roles (nombre_rol, descripcion)
+VALUES
+    ('estudiante', 'Estudiante — puede solicitar tutorías, ver su historial'),
+    ('profesor',   'Profesor / tutor — puede atender tutorías, ver bitácoras')
+ON CONFLICT (nombre_rol) DO NOTHING;
+
+-- Usuarios semilla (passwords hasheadas con Argon2 — mismo algoritmo que auth.py)
+INSERT INTO usuarios (email, password_hash, nombre)
+VALUES
+    ('admin@sistema.com',  '$argon2id$v=19$m=65536,t=3,p=4$jandSQ0pGTLCWyLQv2+WlA$KIPMWE8F5wSBEmjrMPHr6LQIFqDI2aBonEB+lof3m8Q', 'Admin Sistema'),
+    ('jeremias@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$PE2E+C8J7t0c6tk+UYuY2g$Hr0Tvr07HyBEae3m2oyHOkIT5F6LsG3hi4FzOhZ4RSk', 'Jeremías Prueba'),
+    ('profesor@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$ypCpKdHuhcrQBWm/28SW9A$yDB3KsJ7r8/RofDJiEHI3Q4MgoNipUcmpP1eHk9bI4E', 'Profesor Prueba')
+ON CONFLICT (email) DO NOTHING;
+
+-- Asignar roles a los usuarios semilla
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'admin@sistema.com' AND r.nombre_rol = 'admin'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'admin@sistema.com' AND r.nombre_rol = 'profesor'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'jeremias@test.com' AND r.nombre_rol = 'estudiante'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'profesor@test.com' AND r.nombre_rol = 'profesor'
+ON CONFLICT DO NOTHING;

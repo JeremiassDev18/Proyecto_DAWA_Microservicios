@@ -164,6 +164,45 @@ services:
         aliases:
           - chatbot-service
 
+  # ── API Gateway ──
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - security-service
+      - administration-service
+      - tutorias-service
+      - chatbot-service
+    networks:
+      - administration-network
+      - tutorias-network
+      - chatbot-network
+      - security-network
+
+  # ── Frontend ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3008:3008"
+    environment:
+      NEXT_PUBLIC_API_GATEWAY: http://localhost:8080
+    depends_on:
+      - gateway
+    networks:
+      - administration-network
+      - tutorias-network
+      - chatbot-network
+      - security-network
+
   # ── Seguridad ──
   security-db:
     image: postgres:16
