@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+
+  postgres_admin:
+    image: postgres:16
+    container_name: postgres_admin
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: administracion_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d administracion_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_admin_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+
+    networks:
+      administration-network:
+        aliases:
+          - postgres_admin
+
+  administration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: administration-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres_admin:
+        condition: service_healthy
+
+    ports:
+      - "5002:5002"
+
+    env_file:
+      - .env
+
+    networks:
+      administration-network:
+        aliases:
+          - administration-service
+
+volumes:
+  postgres_admin_data:
+
+networks:
+  administration-network:
+    external: true
+    name: tutorias-mesh
