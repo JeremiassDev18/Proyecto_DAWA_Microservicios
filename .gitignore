@@ -1,0 +1,50 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Entornos virtuales ===
+.venv/
+venv/
+v/
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === ML / Model artifacts (regenerables con retrain) ===
+data/setfit_model/
+data/*.pkl
+data/*.joblib
+data/*.npy
+data/*.npz
+!data/.gitkeep
+
+# === Model weights ===
+*.safetensors
+
+# === Script data ===
+scripts/data/
+
+# === Cache, logs, DB ===
+*.log
+.pytest_cache/
+.codegraph/
+*.db
+*.sqlite
+*.sqlite3
+
+# === Secrets / Config local ===
+.env
+
+# === OS ===
+.DS_Store
+Thumbs.db
