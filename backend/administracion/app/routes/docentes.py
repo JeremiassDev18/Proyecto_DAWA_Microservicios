@@ -1,6 +1,8 @@
+from sqlalchemy import func
+
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
-from app.models import Docente, Facultad
+from app.models import Asignatura, Docente, Facultad, Paralelo
 from app.auth import requiere_roles
 from app.audit import registrar_auditoria
 
@@ -11,7 +13,24 @@ docentes_bp = Blueprint("docentes", __name__)
 def listar_docentes():
     db = SessionLocal()
     try:
-        docentes = db.query(Docente).filter(Docente.estado == True).all()
+        query = db.query(Docente).filter(Docente.estado == True)
+
+        materia = request.args.get("materia", "").strip()
+        if materia:
+            query = query.join(Paralelo, Paralelo.docente_id == Docente.id)\
+                         .join(Asignatura, Asignatura.id == Paralelo.asignatura_id)\
+                         .filter(func.unaccent(Asignatura.nombre).ilike(func.unaccent(f"%{materia}%")))\
+                         .distinct()
+
+        search = request.args.get("search", "").strip()
+        if search:
+            for term in search.split():
+                query = query.filter(
+                    func.unaccent(Docente.nombres).ilike(func.unaccent(f"%{term}%")) |
+                    func.unaccent(Docente.apellidos).ilike(func.unaccent(f"%{term}%"))
+                )
+
+        docentes = query.all()
         resultado = []
 
         for docente in docentes:

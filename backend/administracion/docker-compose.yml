@@ -12,6 +12,12 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d administracion_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
     ports:
       - "5433:5432"
 
@@ -33,7 +39,8 @@ services:
     restart: unless-stopped
 
     depends_on:
-      - postgres_admin
+      postgres_admin:
+        condition: service_healthy
 
     ports:
       - "5002:5002"
