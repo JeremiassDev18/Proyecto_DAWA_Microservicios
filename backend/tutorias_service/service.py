@@ -130,18 +130,31 @@ class TutoriasService:
         fecha_solicitud: str | None = None,
         fecha_agendada: str | None = None,
     ) -> Dict[str, object]:
+        asignatura_periodo_id = None
         if self.admin_client:
             validacion = self.admin_client.validar_estudiante(estudiante_id)
             if not validacion.get("valido"):
                 raise ValueError(validacion.get("mensaje", "Estudiante no válido para tutoría"))
+            estudiante_carrera_id = validacion.get("carrera_id")
+            estudiante_periodo_id = validacion.get("periodo_id")
+
             if asignatura_id:
                 val_asig = self.admin_client.validar_asignatura(asignatura_id)
                 if not val_asig.get("valida"):
                     raise ValueError(val_asig.get("mensaje", "Asignatura no válida"))
+                if estudiante_carrera_id and val_asig.get("carrera_id") != estudiante_carrera_id:
+                    raise ValueError("La materia no pertenece a la carrera del estudiante")
+                if estudiante_periodo_id and val_asig.get("periodo_id") != estudiante_periodo_id:
+                    raise ValueError("La materia no corresponde al periodo académico del estudiante")
+                asignatura_periodo_id = val_asig.get("periodo_id")
             if periodo_id:
                 val_per = self.admin_client.validar_periodo_activo(periodo_id)
                 if not val_per.get("valido"):
                     raise ValueError(val_per.get("mensaje", "Periodo académico no válido"))
+
+        # Si no se envió periodo_id pero hay asignatura, se hereda el periodo de la asignatura
+        if not periodo_id and asignatura_periodo_id:
+            periodo_id = asignatura_periodo_id
 
         db = self._get_db()
         try:

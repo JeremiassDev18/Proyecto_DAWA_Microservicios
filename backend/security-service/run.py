@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request, g
 from flask_cors import CORS
+import os
+import requests
 
 from auth import authorize, create_access_token, create_refresh_token, validate_refresh_token, revoke_refresh_token, blacklist_token, decode_token, is_token_blacklisted
 import json
@@ -179,6 +181,34 @@ def create_app() -> Flask:
             user = UserService.create_user(email, password, nombre)
         except Exception as exc:
             return jsonify({"error": "No se pudo completar la operación de registro", "detail": str(exc)}), 500
+
+        # ── Sincronizar con Administración si se enviaron datos académicos ──
+        nombres = payload.get("nombres")
+        apellidos = payload.get("apellidos")
+        carrera_id = payload.get("carrera_id")
+        periodo_id = payload.get("periodo_id")
+
+        if nombres and apellidos and carrera_id and periodo_id:
+            admin_url = os.getenv("ADMIN_SERVICE_URL", "http://administration-service:5002/api/administracion")
+            try:
+                admin_payload = {
+                    "nombres": nombres,
+                    "apellidos": apellidos,
+                    "correo": email,
+                    "matricula": payload.get("matricula", ""),
+                    "carrera_id": carrera_id,
+                    "periodo_id": periodo_id,
+                    "estado_academico": payload.get("estado_academico", "activo"),
+                }
+                resp = requests.post(f"{admin_url}/estudiantes/", json=admin_payload, timeout=10)
+                if not resp.ok:
+                    # Revertir: eliminar usuario de seguridad porque Admin falló
+                    UserService.delete_user(user["id"])
+                    error_msg = resp.json().get("error", "Error al crear perfil académico")
+                    return jsonify({"error": f"Registro incompleto: {error_msg}"}), 502
+            except requests.RequestException:
+                UserService.delete_user(user["id"])
+                return jsonify({"error": "Registro incompleto: no se pudo contactar al servicio académico"}), 502
 
         return jsonify({"usuario": user}), 201
 

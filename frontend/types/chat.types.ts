@@ -22,6 +22,7 @@ export interface ChatRequest {
   mensaje: string
   id_conversacion?: number
   nombre?: string
+  estudiante_id?: number
 }
 
 export interface ChatResponse {

@@ -1,5 +1,6 @@
 import re
 from app.core.config import settings
+from app.core.context import get_estudiante_id
 from app.services.handlers.base import IntentHandler
 from app.services.microservice_client import get_admin_client
 
@@ -75,9 +76,10 @@ class DocenteHandler(IntentHandler):
     def handle(self, conn, usuario_id: int, mensaje: str,
                intent: str, confidence: float) -> dict | None:
         tipo = "logica"
+        estudiante_id = get_estudiante_id() or usuario_id
         admin = get_admin_client()
 
-        mis_docentes = admin.get_estudiante_docentes(usuario_id)
+        mis_docentes = admin.get_estudiante_docentes(estudiante_id)
         if mis_docentes:
             lines = [f"Tus docentes ({len(mis_docentes)}):"]
             for d in mis_docentes:

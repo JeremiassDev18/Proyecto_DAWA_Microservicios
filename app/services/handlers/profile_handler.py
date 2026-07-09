@@ -1,5 +1,6 @@
 import re
 from app.core.config import settings
+from app.core.context import get_estudiante_id
 from app.services.handlers.base import IntentHandler
 from app.services.microservice_client import get_admin_client
 
@@ -40,9 +41,10 @@ class ProfileHandler(IntentHandler):
     def handle(self, conn, usuario_id: int, mensaje: str,
                intent: str, confidence: float) -> dict | None:
         tipo = "logica"
+        estudiante_id = get_estudiante_id() or usuario_id
         admin = get_admin_client()
 
-        estudiante = admin.get_estudiante(usuario_id)
+        estudiante = admin.get_estudiante(estudiante_id)
         if not estudiante:
             return {
                 "respuesta": "No encontré información de tu perfil de estudiante.",
@@ -72,7 +74,7 @@ class ProfileHandler(IntentHandler):
         if estado_ac:
             parts.append(f"  - Estado académico: {estado_ac}")
 
-        mis_docentes = admin.get_estudiante_docentes(usuario_id)
+        mis_docentes = admin.get_estudiante_docentes(estudiante_id)
         if mis_docentes:
             parts.append("")
             parts.append("**Tus docentes actuales:**")
@@ -81,7 +83,7 @@ class ProfileHandler(IntentHandler):
                 asigs = ", ".join(a["nombre"] for a in d.get("asignaturas", []))
                 parts.append(f"  - {full_name} ({asigs})")
 
-        mis_materias = admin.get_materias_estudiante(usuario_id)
+        mis_materias = admin.get_materias_estudiante(estudiante_id)
         if mis_materias:
             parts.append("")
             parts.append("**Tus materias inscritas:**")

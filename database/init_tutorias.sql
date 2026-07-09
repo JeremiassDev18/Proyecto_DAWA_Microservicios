@@ -82,27 +82,33 @@ CREATE INDEX IF NOT EXISTS idx_notificaciones_leida ON notificaciones(leida);
 CREATE INDEX IF NOT EXISTS idx_casos_estudiante ON casos_academicos(estudiante_id);
 
 -- ── Seed data ────────────────────────────────────────────────────────
--- Mapeo contra Administraciónfix (ids de sus tablas):
+-- Mapeo contra Administración (ids de sus tablas):
 --   Periodos:   1=Periodo 2025-2026 (activo), 2=Periodo 2026-2027 (planificado)
---   Docentes:   1=Carlos Docente, 2=Carlos Mendoza López, 3=María González Ruiz
---   Estudiantes: 1=Jeremías Prueba, 2=Luis Andrade, 3=Sofía Cárdenas,
---                4=Andrés Muñoz, 5=Camila Torres
---   Asignaturas: 1=Programación I, 2=Base de Datos, 3=Cálculo I
+--   Docentes:   1=Carlos Docente, 2=Carlos Mendoza López, 3=María González Ruiz,
+--               4=José Martínez Vera, 5=Ana López Torres
+--   Estudiantes: 1=Jeremías Prueba (carrera 1, periodo 1),
+--                2=Luis Andrade (carrera 1, periodo 2), 3=Sofía Cárdenas (carrera 1, periodo 2),
+--                4=Andrés Muñoz (carrera 2, periodo 2), 5=Camila Torres (carrera 2, periodo 2)
+--   Asignaturas: 1=Introducción a la Programación (carrera 1, periodo 1),
+--                2=Programación I (carrera 1, periodo 2), 3=Base de Datos (carrera 1, periodo 2),
+--                4=Cálculo I (carrera 2, periodo 2), 7=Matemáticas Discretas (carrera 1, periodo 1),
+--                8=Fundamentos de Computación (carrera 1, periodo 1),
+--                12=Programación II (carrera 2, periodo 2), 13=Circuitos Digitales (carrera 2, periodo 2)
 
 INSERT INTO solicitudes_tutoria (id, estudiante_id, docente_id, asignatura_id, periodo_id, tema, estado, fecha_solicitud, fecha_agendada, fecha_actualizacion, motivo_cancelacion)
 VALUES
-(1, 1, NULL,  1, 1, 'Estructuras de control',        'solicitada',  '2026-07-01 09:00:00', NULL,                        '2026-07-01 09:00:00', NULL),
-(2, 2, 2,     2, 1, 'Modelo entidad-relación',       'asignada',    '2026-07-02 10:30:00', '2026-07-10 14:00:00',     '2026-07-02 11:00:00', NULL),
-(3, 3, 3,     3, 1, 'Límites y derivadas',           'confirmada',  '2026-07-03 08:00:00', '2026-07-12 09:00:00',     '2026-07-04 09:00:00', NULL),
-(4, 1, 1,     1, 1, 'Programación orientada a objetos', 'atendida', '2026-06-15 14:00:00', '2026-06-20 10:00:00',     '2026-06-20 11:30:00', NULL),
-(5, 4, NULL,  1, 1, 'Arreglos y matrices',           'cancelada',   '2026-07-05 16:00:00', NULL,                        '2026-07-06 10:00:00', 'Problemas personales del estudiante'),
-(6, 5, 2,     2, 1, 'SQL avanzado',                  'no_asistida', '2026-06-25 11:00:00', '2026-07-01 08:00:00',     '2026-07-01 09:00:00', NULL),
-(7, 4, NULL,  3, 1, 'Derivadas parciales',           'solicitada',  '2026-07-07 13:00:00', NULL,                        '2026-07-07 13:00:00', NULL),
-(8, 3, 1,     2, 2, 'Normalización de bases de datos','atendida',   '2026-04-10 09:30:00', '2026-04-15 11:00:00',     '2026-04-15 12:00:00', NULL),
-(9, 2, 3,     3, 1, 'Integrales indefinidas',        'asignada',    '2026-07-08 15:00:00', '2026-07-18 10:00:00',     '2026-07-08 16:00:00', NULL),
-(10, 5, NULL, 1, 1, 'Funciones y procedimientos',    'solicitada',  '2026-07-09 07:30:00', NULL,                        '2026-07-09 07:30:00', NULL),
-(11, 1, 1,    1, 2, 'Manejo de archivos',            'atendida',    '2026-05-05 10:00:00', '2026-05-10 09:00:00',     '2026-05-10 10:30:00', NULL),
-(12, 4, 2,    2, 1, 'Consultas SQL complejas',       'confirmada',  '2026-07-06 12:00:00', '2026-07-16 14:00:00',     '2026-07-07 10:00:00', NULL);
+(1, 1, NULL,  1, 1, 'Estructuras de control',              'solicitada',  '2026-07-01 09:00:00', NULL,                        '2026-07-01 09:00:00', NULL),
+(2, 2, 2,     2, 2, 'Modelo entidad-relación',             'asignada',    '2026-07-02 10:30:00', '2026-07-10 14:00:00',     '2026-07-02 11:00:00', NULL),
+(3, 3, 3,     3, 2, 'Límites y derivadas',                 'confirmada',  '2026-07-03 08:00:00', '2026-07-12 09:00:00',     '2026-07-04 09:00:00', NULL),
+(4, 1, 1,     7, 1, 'Programación orientada a objetos',    'atendida',    '2026-06-15 14:00:00', '2026-06-20 10:00:00',     '2026-06-20 11:30:00', NULL),
+(5, 4, NULL,  4, 2, 'Arreglos y matrices',                 'cancelada',   '2026-07-05 16:00:00', NULL,                        '2026-07-06 10:00:00', 'Problemas personales del estudiante'),
+(6, 5, 2,     12, 2, 'SQL avanzado',                       'no_asistida', '2026-06-25 11:00:00', '2026-07-01 08:00:00',     '2026-07-01 09:00:00', NULL),
+(7, 4, NULL,  13, 2, 'Derivadas parciales',                'solicitada',  '2026-07-07 13:00:00', NULL,                        '2026-07-07 13:00:00', NULL),
+(8, 3, 1,     2, 2, 'Normalización de bases de datos',     'atendida',    '2026-04-10 09:30:00', '2026-04-15 11:00:00',     '2026-04-15 12:00:00', NULL),
+(9, 2, 3,     3, 2, 'Integrales indefinidas',              'asignada',    '2026-07-08 15:00:00', '2026-07-18 10:00:00',     '2026-07-08 16:00:00', NULL),
+(10, 5, NULL, 4, 2, 'Funciones y procedimientos',          'solicitada',  '2026-07-09 07:30:00', NULL,                        '2026-07-09 07:30:00', NULL),
+(11, 1, 1,    8, 1, 'Manejo de archivos',                  'atendida',    '2026-05-05 10:00:00', '2026-05-10 09:00:00',     '2026-05-10 10:30:00', NULL),
+(12, 4, 2,    12, 2, 'Consultas SQL complejas',             'confirmada',  '2026-07-06 12:00:00', '2026-07-16 14:00:00',     '2026-07-07 10:00:00', NULL);
 SELECT setval('solicitudes_tutoria_id_seq', (SELECT MAX(id) FROM solicitudes_tutoria));
 
 INSERT INTO historial_estados (solicitud_id, estado_anterior, estado_nuevo, usuario_id, rol_usuario, fecha_cambio, comentario)

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.dependencies import get_db
+from app.core.context import estudiante_id_ctx
 from app.schemas.requests import ChatRequest, FeedbackRequest
 from app.schemas.responses import (
     ChatResponse, FeedbackResponse, FeedbackStatusResponse,
@@ -17,22 +18,26 @@ router = APIRouter(tags=["chat"])
 def chat(req: ChatRequest, conn=Depends(get_db)):
     logger.info(f"Chat desde usuario {req.usuario_id}: {req.mensaje[:50]}...")
 
-    user_context = {}
+    token = estudiante_id_ctx.set(req.estudiante_id)
     try:
-        client = get_security_client()
-        user_data = client.get_usuario(req.usuario_id)
-        if user_data:
-            user_context["nombre"] = user_data.get("nombre") or user_data.get("nombres", "")
-            user_context["carrera"] = user_data.get("carrera", "")
-    except Exception as e:
-        logger.warning(f"No se pudo obtener datos del usuario {req.usuario_id}: {e}")
+        user_context = {}
+        try:
+            client = get_security_client()
+            user_data = client.get_usuario(req.usuario_id)
+            if user_data:
+                user_context["nombre"] = user_data.get("nombre") or user_data.get("nombres", "")
+                user_context["carrera"] = user_data.get("carrera", "")
+        except Exception as e:
+            logger.warning(f"No se pudo obtener datos del usuario {req.usuario_id}: {e}")
 
-    result = process_message(
-        conn, req.usuario_id, req.mensaje, req.id_conversacion,
-        nombre_cliente=user_context.get("nombre", req.nombre),
-    )
+        result = process_message(
+            conn, req.usuario_id, req.mensaje, req.id_conversacion,
+            nombre_cliente=user_context.get("nombre", req.nombre),
+        )
 
-    return ChatResponse(**result)
+        return ChatResponse(**result)
+    finally:
+        estudiante_id_ctx.reset(token)
 
 
 @router.post("/chat/feedback", response_model=FeedbackResponse)

@@ -196,6 +196,8 @@ def materias_estudiante(estudiante_id):
                 "codigo": a.codigo,
                 "nivel": a.nivel,
                 "creditos": a.creditos,
+                "carrera_id": a.carrera_id,
+                "periodo_id": a.periodo_id,
             }
             for a in asignaturas
         ]), 200

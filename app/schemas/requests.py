@@ -6,6 +6,7 @@ class ChatRequest(BaseModel):
     mensaje: str = Field(..., min_length=1, max_length=1000)
     nombre: str = ""
     id_conversacion: int | None = None
+    estudiante_id: int | None = None
 
 
 class FeedbackRequest(BaseModel):

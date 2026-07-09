@@ -10,9 +10,7 @@ from app.schemas.responses import (
 from app.db import queries as db_queries
 from app.db.training_repository import get_training_data
 from app.controllers.dataset_controller import create_dataset
-from app.services.training_queue import enqueue_training, get_task_status
-from app.services.admin_sync_service import sync as sync_admin_data
-from app.utils.logger import logger
+
 from app.utils.pagination import paginate
 
 router = APIRouter(tags=["admin"])

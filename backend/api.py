@@ -10,10 +10,32 @@ from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
 
+PUBLIC_PATHS = {"/api/tutorias/health"}
+
 
 def create_app(service: Any) -> Flask:
     app = Flask(__name__)
     CORS(app)
+
+    @app.before_request
+    def check_auth():
+        path = request.path.rstrip("/")
+        if path in PUBLIC_PATHS:
+            return None
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token no proporcionado"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            import jwt as pyjwt
+            import os
+            secret = os.getenv("JWT_SECRET_KEY", "1a6790ea7aee933b903e74fcaa2804dfbf61387d6c4d7cb61206fd32b211958b")
+            algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+            payload = pyjwt.decode(token, secret, algorithms=[algorithm])
+            request.user = payload
+        except Exception:
+            return jsonify({"error": "Token inválido o expirado"}), 401
+        return None
 
     @app.route("/api/tutorias/solicitudes/<solicitud_id>/detalle", methods=["GET"])
     def detalle_solicitud(solicitud_id: str):

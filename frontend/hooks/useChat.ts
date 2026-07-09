@@ -8,7 +8,7 @@ import { useToast } from './useToast'
 import type { Conversation, Message, ChatResponse } from '@/types/chat.types'
 
 export const useChat = () => {
-  const { user } = useAuth()
+  const { user, estudianteId } = useAuth()
   const { showToast } = useToast()
   const queryClient = useQueryClient()
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null)
@@ -49,6 +49,7 @@ export const useChat = () => {
         mensaje: text,
         id_conversacion: currentConversationId || undefined,
         nombre: user?.nombre || 'Usuario',
+        estudiante_id: estudianteId || undefined,
       })
 
       const newConvId = response.id_conversacion

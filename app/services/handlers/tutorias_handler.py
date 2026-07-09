@@ -1,5 +1,6 @@
 import re
 from app.core.config import settings
+from app.core.context import get_estudiante_id
 from app.services.handlers.base import IntentHandler
 from app.services.microservice_client import get_admin_client, get_tutorias_client, get_tutorias_rest_client
 
@@ -53,12 +54,19 @@ def _extraer_materia(mensaje: str) -> str | None:
     return None
 
 
-def _materia_coincide(busqueda: str, materias: list[dict]) -> str | None:
+def _materia_coincide(busqueda: str, materias: list[dict]) -> dict | None:
     b = busqueda.lower().translate(_TRANSLIT).strip()
+    # coincidencia exacta o subcadena
     for m in materias:
         n = m.get("nombre", "").lower().translate(_TRANSLIT)
         if b in n or n in b:
-            return m["nombre"]
+            return m
+    # coincidencia por palabras significativas
+    palabras_busqueda = [p for p in b.split() if len(p) >= 4]
+    for m in materias:
+        n = m.get("nombre", "").lower().translate(_TRANSLIT)
+        if any(p in n for p in palabras_busqueda):
+            return m
     return None
 
 
@@ -71,10 +79,13 @@ def _extraer_id(mensaje: str) -> int | None:
 
 class TutoriasHandler(IntentHandler):
     def can_handle(self, intent: str, confidence: float, mensaje: str = "") -> bool:
+        # Intenciones directas de tutoría siempre van aquí
+        if intent in ("CREAR_SOLICITUD", "SOLICITAR_TUTORIA"):
+            return True
         if mensaje:
             if _TUTORIA_KEYWORDS.search(mensaje):
                 return True
-            if intent in ("CREAR_SOLICITUD", "SOLICITAR_TUTORIA") and _SOLICITUD_KEYWORDS.search(mensaje):
+            if _SOLICITUD_KEYWORDS.search(mensaje):
                 return True
         return (intent in TUTORIA_INTENTS
                 and confidence >= settings.CONFIDENCE_THRESHOLD)
@@ -82,8 +93,14 @@ class TutoriasHandler(IntentHandler):
     def handle(self, conn, usuario_id: int, mensaje: str,
                intent: str, confidence: float) -> dict | None:
         tipo = "logica"
+        estudiante_id = get_estudiante_id() or usuario_id
         tutorias = get_tutorias_client()
         admin = get_admin_client()
+        materia = _extraer_materia(mensaje)
+        es_solicitud = (
+            intent in ("CREAR_SOLICITUD", "SOLICITAR_TUTORIA")
+            or (_SOLICITUD_KEYWORDS.search(mensaje) is not None and materia is not None)
+        )
 
         if intent == "CANCELAR_SOLICITUD":
             tutoria_id = _extraer_id(mensaje)
@@ -113,7 +130,7 @@ class TutoriasHandler(IntentHandler):
             msg_lower = mensaje.lower()
             if "bitácora" in msg_lower or "bitacora" in msg_lower:
                 rest = get_tutorias_rest_client()
-                bitacoras = rest.consultar_mis_bitacoras(usuario_id)
+                bitacoras = rest.consultar_mis_bitacoras(estudiante_id)
                 if not bitacoras:
                     return {
                         "respuesta": "No tienes bitácoras registradas.",
@@ -134,7 +151,7 @@ class TutoriasHandler(IntentHandler):
                     "tipo_resolucion": tipo,
                 }
 
-            result = tutorias.consultar_mis_tutorias(usuario_id)
+            result = tutorias.consultar_mis_tutorias(estudiante_id)
             if not result:
                 return {
                     "respuesta": "No tienes tutorías registradas.",
@@ -154,28 +171,43 @@ class TutoriasHandler(IntentHandler):
                 "tipo_resolucion": tipo,
             }
 
-        if intent in ("CREAR_SOLICITUD", "SOLICITAR_TUTORIA"):
-            materia = _extraer_materia(mensaje)
-            if materia:
-                materias_user = admin.get_materias_estudiante(usuario_id)
-                if materias_user:
-                    coincide = _materia_coincide(materia, materias_user)
-                    if not coincide:
-                        lines = [
-                            f"No puedes solicitar tutoría de **{materia.title()}** "
-                            f"porque no la estás cursando actualmente."
-                        ]
-                        lines.append("")
-                        lines.append("**Tus materias inscritas:**")
-                        for m in materias_user:
-                            lines.append(f"  - {m['nombre']}")
-                        return {
-                            "respuesta": "\n".join(lines),
-                            "tipo_resolucion": tipo,
-                        }
+        if es_solicitud:
+            materias_user = admin.get_materias_estudiante(estudiante_id)
 
+            if materia and materias_user:
+                coincide = _materia_coincide(materia, materias_user)
+                if not coincide:
+                    lines = [
+                        f"La materia **{materia.title()}** no está disponible para tutorías "
+                        f"porque no la estás cursando actualmente."
+                    ]
+                    lines.append("")
+                    lines.append("**Tus materias inscritas:**")
+                    for m in materias_user:
+                        lines.append(f"  - {m['nombre']}")
+                    return {
+                        "respuesta": "\n".join(lines),
+                        "tipo_resolucion": tipo,
+                    }
+
+                # Materia encontrada: crear solicitud vinculada a la asignatura
+                result = tutorias.registrar_solicitud(
+                    estudiante_id=estudiante_id,
+                    tema=mensaje,
+                    asignatura_id=coincide.get("id"),
+                    periodo_id=coincide.get("periodo_id"),
+                )
+                codigo = result.get("codigo", "N/A") if result else "N/A"
+                return {
+                    "respuesta": (f"Tu solicitud de tutoría para **{coincide['nombre']}** "
+                                  f"ha sido registrada con código {codigo}. "
+                                  f"Un docente te contactará pronto."),
+                    "tipo_resolucion": tipo,
+                }
+
+            # Sin materia específica: solicitud general
             result = tutorias.registrar_solicitud(
-                estudiante_id=usuario_id,
+                estudiante_id=estudiante_id,
                 tema=mensaje,
             )
             codigo = result.get("codigo", "N/A") if result else "N/A"
@@ -186,7 +218,7 @@ class TutoriasHandler(IntentHandler):
             }
 
         if intent == "CONSULTAR_MIS_TUTORIAS":
-            result = tutorias.consultar_mis_tutorias(usuario_id)
+            result = tutorias.consultar_mis_tutorias(estudiante_id)
             if not result:
                 return {
                     "respuesta": "No tienes tutorías registradas.",
@@ -203,7 +235,7 @@ class TutoriasHandler(IntentHandler):
             }
 
         if intent == "REPORTE_DOCENTE":
-            result = tutorias.reporte_docente(usuario_id)
+            result = tutorias.reporte_docente(estudiante_id)
             if not result:
                 return {
                     "respuesta": "No se pudo generar el reporte del docente.",

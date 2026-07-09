@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS auditoria_administracion (
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ── Seed data ────────────────────────────────────────────────────────
+
 INSERT INTO facultades (nombre, codigo, descripcion)
 VALUES ('Facultad de Ciencias Matemáticas y Físicas', 'FCMF', 'Facultad principal de ejemplo')
 ON CONFLICT DO NOTHING;
@@ -172,10 +174,6 @@ INSERT INTO carreras (nombre, codigo, modalidad, facultad_id)
 VALUES ('Contabilidad y Auditoría', 'CA', 'Presencial', 4)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO carreras (nombre, codigo, modalidad, facultad_id)
-VALUES ('Enfermería', 'ENF', 'Presencial', 5)
-ON CONFLICT DO NOTHING;
-
 INSERT INTO docentes (nombres, apellidos, correo, especialidad, facultad_id)
 VALUES ('Carlos', 'Docente', 'carlos@test.com', 'Tutorías', 1)
 ON CONFLICT DO NOTHING;
@@ -196,64 +194,50 @@ INSERT INTO docentes (nombres, apellidos, correo, telefono, especialidad, facult
 VALUES ('Ana', 'López Torres', 'ana.lopez@universidad.edu.ec', '0994567890', 'Auditoría Financiera', 4)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO docentes (nombres, apellidos, correo, telefono, especialidad, facultad_id)
-VALUES ('Pedro', 'Ramírez Castro', 'pedro.ramirez@universidad.edu.ec', '0995678901', 'Cuidados Intensivos', 5)
-ON CONFLICT DO NOTHING;
+INSERT INTO asignaturas (id, nombre, codigo, creditos, nivel, carrera_id, periodo_id) VALUES
+    (1,  'Introducción a la Programación', 'INTRO1', 4, 'Primero', 1, 1),
+    (2,  'Programación I',                 'PROG1',  5, 'Primero', 1, 2),
+    (3,  'Base de Datos',                  'BD1',    4, 'Segundo', 1, 2),
+    (4,  'Cálculo I',                      'CAL1',   5, 'Primero', 2, 2),
+    (5,  'Marketing',                      'MKT1',   4, 'Tercero', 4, 2),
+    (6,  'Contabilidad General',           'CONT1',  5, 'Primero', 5, 2),
+    (7,  'Matemáticas Discretas',          'MD1',    4, 'Primero', 1, 1),
+    (8,  'Fundamentos de Computación',     'FC1',    3, 'Primero', 1, 1),
+    (9,  'Estructuras de Datos',           'ED1',    4, 'Segundo', 1, 2),
+    (10, 'Álgebra Lineal',                 'AL1',    4, 'Primero', 2, 1),
+    (11, 'Física I',                       'FI1',    4, 'Primero', 2, 1),
+    (12, 'Programación II',                'PROG2',  4, 'Segundo', 2, 2),
+    (13, 'Circuitos Digitales',            'CD1',    4, 'Segundo', 2, 2),
+    (14, 'Estática',                       'EST1',   4, 'Segundo', 3, 2),
+    (15, 'Materiales de Construcción',     'MC1',    3, 'Segundo', 3, 2),
+    (16, 'Gestión de Recursos Humanos',    'RRHH1',  3, 'Tercero', 4, 2),
+    (17, 'Economía I',                     'ECO1',   3, 'Primero', 4, 1),
+    (18, 'Auditoría I',                    'AUD1',   4, 'Tercero', 5, 2),
+    (19, 'Matemáticas Financieras',        'MF1',    3, 'Primero', 5, 1)
+ON CONFLICT (codigo) DO UPDATE SET
+    nombre = EXCLUDED.nombre, creditos = EXCLUDED.creditos,
+    nivel = EXCLUDED.nivel, carrera_id = EXCLUDED.carrera_id,
+    periodo_id = EXCLUDED.periodo_id;
+SELECT setval('asignaturas_id_seq', (SELECT MAX(id) FROM asignaturas));
 
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Introducción a la Programación', 'INTRO1', 4, 'Primero', 1, 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Programación I', 'PROG1', 5, 'Primero', 1, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Base de Datos', 'BD1', 4, 'Segundo', 1, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Cálculo I', 'CAL1', 5, 'Primero', 2, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Marketing', 'MKT1', 4, 'Tercero', 4, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Contabilidad General', 'CONT1', 5, 'Primero', 5, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO asignaturas (nombre, codigo, creditos, nivel, carrera_id, periodo_id)
-VALUES ('Anatomía', 'ANAT1', 4, 'Primero', 6, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 1, 7, 1, 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 1, 1, 2, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('B', 1, 2, 3, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 2, 3, 2, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 3, 4, 4, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 4, 5, 5, 2)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id)
-VALUES ('A', 5, 6, 6, 2)
+INSERT INTO paralelos (nombre, carrera_id, asignatura_id, docente_id, periodo_id) VALUES
+    ('A', 1, 1,  2, 2),
+    ('B', 1, 2,  3, 2),
+    ('A', 2, 4,  2, 2),
+    ('A', 3, 14, 4, 2),
+    ('A', 4, 5,  5, 2),
+    ('B', 2, 11, 2, 1),
+    ('A', 1, 9,  3, 2),
+    ('A', 5, 18, 5, 2),
+    ('A', 2, 10, 2, 1),
+    ('B', 1, 8,  1, 1),
+    ('A', 2, 12, 2, 2),
+    ('A', 1, 7,  1, 1),
+    ('A', 4, 16, 4, 2),
+    ('B', 2, 13, 3, 2),
+    ('A', 3, 15, 3, 2),
+    ('A', 5, 19, 5, 1),
+    ('A', 4, 17, 4, 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO estudiantes (nombres, apellidos, correo, matricula, carrera_id, periodo_id)
@@ -298,4 +282,4 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO estudiantes (nombres, apellidos, correo, matricula, carrera_id, periodo_id)
 VALUES ('Gabriela', 'Romero Vera', 'gabriela.romero@universidad.edu.ec', '2025010', 5, 2)
-ON CONFLICT DO NOTHING; 
+ON CONFLICT DO NOTHING;

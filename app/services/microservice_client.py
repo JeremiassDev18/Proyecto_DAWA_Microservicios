@@ -52,7 +52,8 @@ class SecurityClient:
     def _es_admin(self, user_data: dict) -> bool:
         roles = user_data.get("roles", []) or []
         return any(
-            (r.get("nombre") or r.get("rol") or "").lower() == "admin"
+            ((r.get("nombre") or r.get("rol") or "").lower() == "admin"
+             if isinstance(r, dict) else str(r).lower() == "admin")
             for r in roles
         )
 
