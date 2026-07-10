@@ -57,6 +57,18 @@ class AdministracionClient:
             logger.error(f"Error de conexión obteniendo docente {docente_id}: {e}")
             return {}
 
+    def obtener_estudiante(self, estudiante_id: int | str) -> Dict[str, Any]:
+        try:
+            return self._get(f"/estudiantes/{estudiante_id}")
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return {}
+            logger.error(f"Error HTTP obteniendo estudiante {estudiante_id}: {e}")
+            return {}
+        except requests.RequestException as e:
+            logger.error(f"Error de conexión obteniendo estudiante {estudiante_id}: {e}")
+            return {}
+
     def obtener_disponibilidad_docente(self, docente_id: int | str) -> Dict[str, Any]:
         try:
             return self._get(f"/internos/disponibilidad-docente/{docente_id}")

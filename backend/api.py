@@ -353,6 +353,272 @@ def create_app(service: Any) -> Flask:
             logger.error(f"Error consultando notificaciones: {e}")
             return jsonify({"error": str(e)}), 500
 
+    # ── Sesiones grupales ────────────────────────────────────────
+
+    @app.route("/api/tutorias/sesiones", methods=["GET"])
+    def listar_sesiones():
+        try:
+            asignatura_id = request.args.get("asignatura_id")
+            materia_nombre = request.args.get("materia_nombre")
+            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre)
+            return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando sesiones: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/docente/<docente_id>", methods=["GET"])
+    def listar_sesiones_docente(docente_id: str):
+        try:
+            resultado = service.listar_sesiones_docente(docente_id)
+            return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando sesiones del docente: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/inscritos", methods=["GET"])
+    def listar_inscritos(sesion_id: str):
+        try:
+            resultado = service.listar_inscritos_sesion(sesion_id)
+            return jsonify({"cantidad": len(resultado), "inscritos": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando inscritos: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/inscribir", methods=["POST"])
+    def inscribir_en_sesion(sesion_id: str):
+        try:
+            data = request.get_json() or {}
+            estudiante_id = data.get("estudiante_id")
+            if not estudiante_id:
+                return jsonify({"error": "estudiante_id requerido"}), 400
+            resultado = service.inscribir_en_sesion(sesion_id, estudiante_id)
+            return jsonify(resultado), 201
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error inscribiendo en sesión: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/iniciar", methods=["PUT"])
+    def iniciar_sesion(sesion_id: str):
+        try:
+            usuario_id = (request.user or {}).get("usuario_id")
+            resultado = service.iniciar_sesion(sesion_id, usuario_id)
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error iniciando sesión: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/finalizar", methods=["PUT"])
+    def finalizar_sesion(sesion_id: str):
+        try:
+            data = request.get_json() or {}
+            usuario_id = (request.user or {}).get("usuario_id")
+            resultado = service.finalizar_sesion(sesion_id, usuario_id, data.get("detalle"))
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error finalizando sesión: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # ── Aceptar / Rechazar solicitudes ───────────────────────────
+
+    @app.route("/api/tutorias/solicitudes/<solicitud_id>/aceptar", methods=["PUT"])
+    def aceptar_solicitud(solicitud_id: str):
+        try:
+            data = request.get_json() or {}
+            docente_id = data.get("docente_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id requerido"}), 400
+            usuario_id = (request.user or {}).get("usuario_id")
+            capacidad = data.get("capacidad_maxima", 20)
+            fecha_agendada = data.get("fecha_agendada")
+            resultado = service.aceptar_solicitud(
+                solicitud_id, docente_id, usuario_id, capacidad, fecha_agendada
+            )
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error aceptando solicitud: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/solicitudes/<solicitud_id>/rechazar", methods=["PUT"])
+    def rechazar_solicitud(solicitud_id: str):
+        try:
+            data = request.get_json() or {}
+            docente_id = data.get("docente_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id requerido"}), 400
+            usuario_id = (request.user or {}).get("usuario_id")
+            motivo = data.get("motivo", "")
+            resultado = service.rechazar_solicitud(solicitud_id, docente_id, motivo, usuario_id)
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error rechazando solicitud: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/solicitudes/pendientes/<docente_id>", methods=["GET"])
+    def solicitudes_pendientes_docente(docente_id: str):
+        try:
+            resultado = service.listar_solicitudes_pendientes_docente(docente_id)
+            return jsonify({"cantidad": len(resultado), "solicitudes": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando solicitudes pendientes: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # ── Rutas alias para compatibilidad con frontend ──────────────
+
+    @app.route("/api/tutorias/sesiones/abiertas", methods=["GET"])
+    def listar_sesiones_abiertas_alias():
+        try:
+            asignatura_id = request.args.get("asignatura_id")
+            materia_nombre = request.args.get("materia_nombre")
+            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre)
+            return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando sesiones abiertas: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/docente", methods=["GET"])
+    def listar_sesiones_docente_alias():
+        try:
+            docente_id = request.args.get("docente_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id requerido"}), 400
+            resultado = service.listar_sesiones_docente(docente_id)
+            return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando sesiones del docente: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/solicitudes-pendientes", methods=["GET"])
+    def solicitudes_pendientes_alias():
+        try:
+            docente_id = request.args.get("docente_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id requerido"}), 400
+            resultado = service.listar_solicitudes_pendientes_docente(docente_id)
+            return jsonify({"cantidad": len(resultado), "solicitudes": resultado}), 200
+        except Exception as e:
+            logger.error(f"Error listando solicitudes pendientes: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/aceptar/<solicitud_id>", methods=["PUT"])
+    def aceptar_solicitud_alias(solicitud_id: str):
+        try:
+            data = request.get_json() or {}
+            docente_id = data.get("docente_id") or data.get("usuario_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id o usuario_id requerido"}), 400
+            usuario_id = (request.user or {}).get("usuario_id")
+            capacidad = data.get("capacidad_maxima", 20)
+            fecha_agendada = data.get("fecha_agendada")
+            resultado = service.aceptar_solicitud(
+                solicitud_id, docente_id, usuario_id, capacidad, fecha_agendada
+            )
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error aceptando solicitud (alias): {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/rechazar/<solicitud_id>", methods=["PUT"])
+    def rechazar_solicitud_alias(solicitud_id: str):
+        try:
+            data = request.get_json() or {}
+            docente_id = data.get("docente_id") or data.get("usuario_id")
+            if not docente_id:
+                return jsonify({"error": "docente_id o usuario_id requerido"}), 400
+            usuario_id = (request.user or {}).get("usuario_id")
+            motivo = data.get("motivo", "")
+            resultado = service.rechazar_solicitud(solicitud_id, docente_id, motivo, usuario_id)
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error rechazando solicitud (alias): {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # ── Admin: crear sesión directamente ─────────────────────────
+
+    @app.route("/api/tutorias/sesiones/crear", methods=["POST"])
+    def crear_sesion_admin():
+        data = request.get_json(silent=True) or {}
+        docente_id = data.get("docente_id")
+        tema = data.get("tema", "")
+        if not docente_id or not tema:
+            return jsonify({"error": "docente_id y tema son requeridos"}), 400
+        try:
+            usuario_id = (request.user or {}).get("usuario_id")
+            resultado = service.crear_sesion_admin(
+                docente_id=docente_id,
+                estudiante_id=data.get("estudiante_id"),
+                asignatura_id=data.get("asignatura_id"),
+                tema=tema,
+                descripcion=data.get("descripcion"),
+                capacidad_maxima=data.get("capacidad_maxima", 20),
+                fecha_agendada=data.get("fecha_agendada"),
+                usuario_id=usuario_id,
+            )
+            return jsonify(resultado), 201
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error creando sesión admin: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # ── Docente: bitácora y asistencia de sesión ─────────────────
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/bitacora", methods=["POST"])
+    def registrar_bitacora_sesion(sesion_id: str):
+        data = request.get_json(silent=True) or {}
+        detalle = data.get("detalle")
+        if not detalle:
+            return jsonify({"error": "detalle requerido"}), 400
+        try:
+            usuario_id = (request.user or {}).get("usuario_id")
+            resultado = service.registrar_bitacora_sesion(
+                sesion_id=sesion_id,
+                detalle=detalle,
+                temas_detectados=data.get("temas_detectados"),
+                usuario_id=usuario_id,
+            )
+            return jsonify(resultado), 201
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error registrando bitácora de sesión: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/sesiones/<sesion_id>/asistencia", methods=["POST"])
+    def registrar_asistencia_sesion(sesion_id: str):
+        data = request.get_json(silent=True) or {}
+        estudiante_id = data.get("estudiante_id")
+        asistio = data.get("asistio")
+        if estudiante_id is None or asistio is None:
+            return jsonify({"error": "estudiante_id y asistio requeridos"}), 400
+        try:
+            usuario_id = (request.user or {}).get("usuario_id")
+            resultado = service.registrar_asistencia_sesion(
+                sesion_id=sesion_id,
+                estudiante_id=estudiante_id,
+                asistio=bool(asistio),
+                usuario_id=usuario_id,
+            )
+            return jsonify(resultado), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error registrando asistencia: {e}")
+            return jsonify({"error": str(e)}), 500
+
     return app
 
 

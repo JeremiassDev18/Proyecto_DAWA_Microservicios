@@ -106,6 +106,42 @@ _DOCENTE_MIS_ESTUDIANTES_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ─── Session pre-routing patterns ────────────────────────────────────────────
+_SESIONES_ABIERTAS_RE = re.compile(
+    r"(sesiones?\s+abiertas?|sesiones?\s+disponibles?|qu[eé]\s+sesiones?\s+(hay|existen|est[aá]n)"
+    r"|ver\s+sesiones|unirme\s+a\s+sesi[oó]n|inscribirme\s+en\s+sesi[oó]n"
+    r"|cu[aá]les?\s+son\s+las?\s+sesiones)",
+    re.IGNORECASE,
+)
+_DOCENTE_MIS_SESIONES_RE = re.compile(
+    r"(mis\s+sesiones|ver\s+mis\s+sesiones|sesiones\s+que\s+(tengo|imparto|doy))",
+    re.IGNORECASE,
+)
+_DOCENTE_SOLICITUDES_PENDIENTES_RE = re.compile(
+    r"(solicitudes?\s+pendientes|ver\s+solicitudes|solicitudes?\s+de\s+tutor[ií]a"
+    r"|cu[aá]ntas?\s+solicitudes|qu[eé]\s+solicitudes\s+(tengo|hay))",
+    re.IGNORECASE,
+)
+_DOCENTE_ACEPTAR_RE = re.compile(
+    r"(aceptar\s+(la\s+)?solicitud|aceptar\s+tutor[ií]a|dar\s+ok\s+a\s+solicitud"
+    r"|confirmar\s+solicitud|aceptar\s+solicitud\s+#?(\d+))",
+    re.IGNORECASE,
+)
+_DOCENTE_RECHAZAR_RE = re.compile(
+    r"(rechazar\s+(la\s+)?solicitud|rechazar\s+tutor[ií]a|rechazar\s+solicitud\s+#?(\d+))",
+    re.IGNORECASE,
+)
+_DOCENTE_INICIAR_SESION_RE = re.compile(
+    r"(iniciar\s+sesi[oó]n|empezar\s+sesi[oó]n|comenzar\s+sesi[oó]n"
+    r"|iniciar\s+sesi[oó]n\s+#?(\d+))",
+    re.IGNORECASE,
+)
+_DOCENTE_FINALIZAR_SESION_RE = re.compile(
+    r"(finalizar\s+sesi[oó]n|terminar\s+sesi[oó]n|cerrar\s+sesi[oó]n"
+    r"|finalizar\s+sesi[oó]n\s+#?(\d+))",
+    re.IGNORECASE,
+)
+
 
 def _detect_student_query(mensaje: str) -> dict | None:
     """Detecta preguntas del estudiante (materias, bitácoras, tutorías, perfil)."""
@@ -119,6 +155,77 @@ def _detect_student_query(mensaje: str) -> dict | None:
         return {"tool": "consultar_tutorias"}
     if _STUDENT_PERFIL_RE.search(msg):
         return {"tool": "consultar_perfil_completo"}
+
+    return None
+
+
+def _detect_session_query(mensaje: str) -> dict | None:
+    """Detecta preguntas sobre sesiones (abiertas, inscripción, etc.)."""
+    msg = mensaje.strip()
+
+    if _SESIONES_ABIERTAS_RE.search(msg):
+        # Extraer materia si se menciona
+        m = re.search(r"(?:de|para|en)\s+(.+?)(?:\?|$)", msg, re.IGNORECASE)
+        materia = m.group(1).strip().rstrip("?").strip() if m else None
+        return {"tool": "buscar_sesiones_abiertas", "materia_nombre": materia}
+
+    return None
+
+
+def _detect_docente_session_query(mensaje: str) -> dict | None:
+    """Detecta acciones del docente sobre sesiones y solicitudes."""
+    msg = mensaje.strip()
+
+    if _DOCENTE_ACEPTAR_RE.search(msg):
+        m = _DOCENTE_ACEPTAR_RE.search(msg)
+        groups = m.groups() if m else []
+        solicitud_id = None
+        for g in groups:
+            if g and g.isdigit():
+                solicitud_id = int(g)
+                break
+        return {"tool": "aceptar_solicitud_tutoria", "solicitud_id": solicitud_id}
+
+    if _DOCENTE_RECHAZAR_RE.search(msg):
+        m = _DOCENTE_RECHAZAR_RE.search(msg)
+        groups = m.groups() if m else []
+        solicitud_id = None
+        motivo = ""
+        for g in groups:
+            if g and g.isdigit():
+                solicitud_id = int(g)
+                break
+        # Extraer motivo después de "por"
+        motivo_match = re.search(r"por\s+(.+)", msg, re.IGNORECASE)
+        if motivo_match:
+            motivo = motivo_match.group(1).strip().rstrip("?").strip()
+        return {"tool": "rechazar_solicitud_tutoria", "solicitud_id": solicitud_id, "motivo": motivo}
+
+    if _DOCENTE_INICIAR_SESION_RE.search(msg):
+        m = _DOCENTE_INICIAR_SESION_RE.search(msg)
+        groups = m.groups() if m else []
+        sesion_id = None
+        for g in groups:
+            if g and g.isdigit():
+                sesion_id = int(g)
+                break
+        return {"tool": "iniciar_sesion_tutoria", "sesion_id": sesion_id}
+
+    if _DOCENTE_FINALIZAR_SESION_RE.search(msg):
+        m = _DOCENTE_FINALIZAR_SESION_RE.search(msg)
+        groups = m.groups() if m else []
+        sesion_id = None
+        for g in groups:
+            if g and g.isdigit():
+                sesion_id = int(g)
+                break
+        return {"tool": "finalizar_sesion_tutoria", "sesion_id": sesion_id}
+
+    if _DOCENTE_MIS_SESIONES_RE.search(msg):
+        return {"tool": "listar_sesiones_docente"}
+
+    if _DOCENTE_SOLICITUDES_PENDIENTES_RE.search(msg):
+        return {"tool": "listar_solicitudes_pendientes"}
 
     return None
 
@@ -411,6 +518,90 @@ class AgentPlanner:
                 herramientas_usadas=herramientas_usadas,
             )
 
+        # Pre-routing sesiones: buscar sesiones abiertas (estudiantes).
+        session_match = _detect_session_query(mensaje)
+        if session_match and self.rol in ("estudiante", "admin", "docente", "manager"):
+            tool_name = session_match["tool"]
+            materia_nombre = session_match.get("materia_nombre")
+            logger.info(f"[AgentPlanner] pre-routing sesiones: tool={tool_name} materia={materia_nombre}")
+            content, state = self._tutorias.buscar_sesiones_abiertas(materia_nombre=materia_nombre)
+            herramientas_usadas = [tool_name]
+            self.memory.update_state(state)
+            self.memory.add("tool", content, name=tool_name)
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else content
+            if (not final_content
+                    or final_content.strip().endswith("()")
+                    or len(final_content.strip()) < 10):
+                final_content = content
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada=tool_name,
+                herramientas_usadas=herramientas_usadas,
+            )
+
+        # Pre-routing docente: acciones sobre sesiones y solicitudes.
+        docente_session_match = _detect_docente_session_query(mensaje)
+        if docente_session_match and self.rol in ("docente", "admin", "manager"):
+            tool_name = docente_session_match["tool"]
+            logger.info(f"[AgentPlanner] pre-routing docente-session: tool={tool_name}")
+            try:
+                if tool_name == "aceptar_solicitud_tutoria":
+                    content, state = self._tutorias.aceptar_solicitud(
+                        solicitud_id=docente_session_match["solicitud_id"] or 0,
+                        usuario_id=self.usuario_id,
+                    )
+                elif tool_name == "rechazar_solicitud_tutoria":
+                    content, state = self._tutorias.rechazar_solicitud(
+                        solicitud_id=docente_session_match["solicitud_id"] or 0,
+                        motivo=docente_session_match.get("motivo", ""),
+                        usuario_id=self.usuario_id,
+                    )
+                elif tool_name == "iniciar_sesion_tutoria":
+                    content, state = self._tutorias.iniciar_sesion(
+                        sesion_id=docente_session_match["sesion_id"] or 0,
+                    )
+                elif tool_name == "finalizar_sesion_tutoria":
+                    content, state = self._tutorias.finalizar_sesion(
+                        sesion_id=docente_session_match["sesion_id"] or 0,
+                    )
+                elif tool_name == "listar_sesiones_docente":
+                    content, state = self._tutorias.listar_sesiones_docente()
+                elif tool_name == "listar_solicitudes_pendientes":
+                    content, state = self._tutorias.listar_solicitudes_pendientes()
+                else:
+                    content, state = "Acción no reconocida.", {}
+            except Exception as e:
+                logger.error(f"[AgentPlanner] pre-routing docente-session error: {e}")
+                content, state = f"Error: {e}", {}
+
+            herramientas_usadas = [tool_name]
+            self.memory.update_state(state)
+            self.memory.add("tool", content, name=tool_name)
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else content
+            if (not final_content
+                    or final_content.strip().endswith("()")
+                    or len(final_content.strip()) < 10):
+                final_content = content
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada=tool_name,
+                herramientas_usadas=herramientas_usadas,
+            )
+
         max_iterations = settings.OLLAMA_MAX_TOOL_ITERATIONS
         herramientas_usadas: list[str] = []
 
@@ -622,6 +813,56 @@ class AgentPlanner:
             if call.tool == "listar_estudiantes_por_docente":
                 content, state = self._admin.listar_estudiantes_por_docente(
                     usuario_id=self.usuario_id,
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "buscar_sesiones_abiertas":
+                content, state = self._tutorias.buscar_sesiones_abiertas(
+                    materia_nombre=call.parameters.get("materia_nombre"),
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "inscribirse_sesion":
+                content, state = self._tutorias.inscribirse_sesion(
+                    sesion_id=self._param_int(call.parameters, "sesion_id"),
+                    estudiante_id=eid,
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "aceptar_solicitud_tutoria":
+                content, state = self._tutorias.aceptar_solicitud(
+                    solicitud_id=self._param_int(call.parameters, "solicitud_id"),
+                    usuario_id=self.usuario_id,
+                    capacidad_maxima=self._param_optional_int(call.parameters, "capacidad_maxima") or 20,
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "rechazar_solicitud_tutoria":
+                content, state = self._tutorias.rechazar_solicitud(
+                    solicitud_id=self._param_int(call.parameters, "solicitud_id"),
+                    motivo=self._param_str(call.parameters, "motivo"),
+                    usuario_id=self.usuario_id,
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "listar_sesiones_docente":
+                content, state = self._tutorias.listar_sesiones_docente()
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "listar_solicitudes_pendientes":
+                content, state = self._tutorias.listar_solicitudes_pendientes()
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "iniciar_sesion_tutoria":
+                content, state = self._tutorias.iniciar_sesion(
+                    sesion_id=self._param_int(call.parameters, "sesion_id"),
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "finalizar_sesion_tutoria":
+                content, state = self._tutorias.finalizar_sesion(
+                    sesion_id=self._param_int(call.parameters, "sesion_id"),
+                    detalle=call.parameters.get("detalle"),
                 )
                 return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
 

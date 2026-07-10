@@ -10,7 +10,9 @@ from .models_db import (
     BitacoraAtencion,
     CasoAcademicoDB,
     HistorialEstado,
+    InscripcionSesion,
     Notificacion,
+    SesionTutoria,
     SolicitudTutoria,
 )
 
@@ -40,19 +42,42 @@ class TutoriasService:
     def _serializar_solicitud(self, s: SolicitudTutoria) -> Dict[str, Any]:
         fs = s.fecha_solicitud
         fa = s.fecha_agendada
+        estudiante_nombre = None
+        materia_nombre = None
+        if self.admin_client:
+            try:
+                estudiante = self.admin_client.obtener_estudiante(s.estudiante_id)
+                if estudiante:
+                    estudiante_nombre = f"{estudiante.get('nombres', '')} {estudiante.get('apellidos', '')}".strip()
+            except Exception:
+                pass
+            try:
+                if s.asignatura_id:
+                    asignaturas = self.admin_client._get(f"/asignaturas/")
+                    if isinstance(asignaturas, list):
+                        for a in asignaturas:
+                            if a.get("id") == s.asignatura_id:
+                                materia_nombre = a.get("nombre")
+                                break
+            except Exception:
+                pass
         return {
             "id": s.id,
             "codigo": str(s.id),
             "estudiante_id": s.estudiante_id,
+            "estudiante_nombre": estudiante_nombre,
             "docente_id": s.docente_id,
             "asignatura_id": s.asignatura_id,
+            "materia_nombre": materia_nombre,
             "periodo_id": s.periodo_id,
+            "sesion_id": s.sesion_id,
             "tema": s.tema,
             "estado": s.estado,
             "fecha_solicitud": fs.isoformat() if fs else None,
             "fecha_agendada": fa.isoformat() if fa else None,
             "fecha_actualizacion": s.fecha_actualizacion.isoformat() if s.fecha_actualizacion else None,
             "motivo_cancelacion": s.motivo_cancelacion,
+            "motivo_rechazo": s.motivo_rechazo,
         }
 
     def _registrar_auditoria(self, db: Session, usuario_id: str | None, accion: str, descripcion: str) -> None:
@@ -637,5 +662,506 @@ class TutoriasService:
                 }
                 for n in registros
             ]
+        finally:
+            db.close()
+
+    # ── Métodos de sesiones grupales ─────────────────────────────
+
+    def _serializar_sesion(self, s: SesionTutoria) -> Dict[str, Any]:
+        fa = s.fecha_agendada
+        fi = s.fecha_inicio
+        ff = s.fecha_fin
+        docente_nombre = None
+        materia_nombre = None
+        if self.admin_client:
+            try:
+                docente = self.admin_client.obtener_docente(s.docente_id)
+                if docente:
+                    docente_nombre = f"{docente.get('nombres', '')} {docente.get('apellidos', '')}".strip()
+            except Exception:
+                pass
+            try:
+                if s.asignatura_id:
+                    asignaturas = self.admin_client._get(f"/asignaturas/")
+                    if isinstance(asignaturas, list):
+                        for a in asignaturas:
+                            if a.get("id") == s.asignatura_id:
+                                materia_nombre = a.get("nombre")
+                                break
+            except Exception:
+                pass
+        return {
+            "id": s.id,
+            "solicitud_id": s.solicitud_id,
+            "docente_id": s.docente_id,
+            "docente_nombre": docente_nombre,
+            "asignatura_id": s.asignatura_id,
+            "materia_nombre": materia_nombre,
+            "tema": s.tema,
+            "descripcion": s.descripcion,
+            "estado": s.estado,
+            "fecha_creacion": s.fecha_creacion.isoformat() if s.fecha_creacion else None,
+            "fecha_agendada": fa.isoformat() if fa else None,
+            "fecha_inicio": fi.isoformat() if fi else None,
+            "fecha_fin": ff.isoformat() if ff else None,
+            "capacidad_maxima": s.capacidad_maxima,
+            "total_inscritos": s.total_inscritos,
+            "inscritos_count": s.total_inscritos,
+        }
+
+    def _serializar_inscripcion(self, ins: InscripcionSesion) -> Dict[str, Any]:
+        return {
+            "id": ins.id,
+            "sesion_id": ins.sesion_id,
+            "estudiante_id": ins.estudiante_id,
+            "fecha_inscripcion": ins.fecha_inscripcion.isoformat() if ins.fecha_inscripcion else None,
+            "asistio": ins.asistio,
+        }
+
+    def aceptar_solicitud(
+        self,
+        solicitud_id: int | str,
+        docente_id: int | str,
+        usuario_id: str | None = None,
+        capacidad_maxima: int = 20,
+        fecha_agendada: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente acepta la solicitud → se crea una sesión grupal abierta."""
+        db = self._get_db()
+        try:
+            solicitud = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.id == int(solicitud_id)
+            ).first()
+            if not solicitud:
+                raise ValueError("No existe la solicitud")
+
+            if solicitud.estado not in ("solicitada", "asignada", "sin_asignar"):
+                raise ValueError(f"No se puede aceptar: estado actual '{solicitud.estado}'")
+
+            fa = None
+            if fecha_agendada:
+                try:
+                    fa = datetime.fromisoformat(fecha_agendada)
+                except ValueError:
+                    pass
+
+            estado_anterior = solicitud.estado
+            solicitud.docente_id = int(docente_id)
+            solicitud.estado = "confirmada"
+            solicitud.fecha_actualizacion = _now()
+
+            sesion = SesionTutoria(
+                solicitud_id=solicitud.id,
+                docente_id=int(docente_id),
+                asignatura_id=solicitud.asignatura_id,
+                tema=solicitud.tema,
+                descripcion=f"Sesión de tutoría aceptada por el docente",
+                estado="abierta",
+                fecha_creacion=_now(),
+                fecha_agendada=fa,
+                capacidad_maxima=capacidad_maxima,
+                total_inscritos=0,
+            )
+            db.add(sesion)
+            db.flush()
+
+            solicitud.sesion_id = sesion.id
+
+            self._crear_historial(db, solicitud.id, estado_anterior, "confirmada",
+                                  usuario_id=usuario_id, rol_usuario="docente",
+                                  comentario="Solicitud aceptada, sesión grupal creada")
+            self._registrar_auditoria(db, usuario_id, "ACEPTAR_SOLICITUD",
+                                      f"Solicitud {solicitud_id} aceptada, sesión {sesion.id} creada")
+            self._crear_notificacion(db, solicitud.id, solicitud.estudiante_id, "estudiante",
+                                     "solicitud_aceptada",
+                                     f"Tu solicitud #{solicitud_id} fue aceptada. Sesión #{sesion.id} abierta.")
+
+            db.commit()
+            db.refresh(sesion)
+            return self._serializar_sesion(sesion)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def rechazar_solicitud(
+        self,
+        solicitud_id: int | str,
+        docente_id: int | str,
+        motivo: str = "",
+        usuario_id: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente rechaza la solicitud → vuelve a 'sin_asignar'."""
+        db = self._get_db()
+        try:
+            solicitud = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.id == int(solicitud_id)
+            ).first()
+            if not solicitud:
+                raise ValueError("No existe la solicitud")
+
+            estado_anterior = solicitud.estado
+            solicitud.docente_id = None
+            solicitud.estado = "sin_asignar"
+            solicitud.motivo_rechazo = motivo
+            solicitud.fecha_actualizacion = _now()
+
+            self._crear_historial(db, solicitud.id, estado_anterior, "sin_asignar",
+                                  usuario_id=usuario_id, rol_usuario="docente",
+                                  comentario=f"Rechazada: {motivo}")
+            self._registrar_auditoria(db, usuario_id, "RECHAZAR_SOLICITUD",
+                                      f"Solicitud {solicitud_id} rechazada: {motivo}")
+            self._crear_notificacion(db, solicitud.id, solicitud.estudiante_id, "estudiante",
+                                     "solicitud_rechazada",
+                                     f"Tu solicitud #{solicitud_id} fue rechazada. Motivo: {motivo}")
+
+            db.commit()
+            db.refresh(solicitud)
+            return self._serializar_solicitud(solicitud)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def inscribir_en_sesion(
+        self,
+        sesion_id: int | str,
+        estudiante_id: int | str,
+    ) -> Dict[str, Any]:
+        """Estudiante se inscribe en una sesión grupal abierta."""
+        db = self._get_db()
+        try:
+            sesion = db.query(SesionTutoria).filter(
+                SesionTutoria.id == int(sesion_id)
+            ).first()
+            if not sesion:
+                raise ValueError("No existe la sesión")
+
+            if sesion.estado != "abierta":
+                raise ValueError(f"La sesión no está abierta (estado: {sesion.estado})")
+
+            existente = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == int(sesion_id),
+                InscripcionSesion.estudiante_id == int(estudiante_id),
+            ).first()
+            if existente:
+                raise ValueError("Ya estás inscrito en esta sesión")
+
+            if sesion.total_inscritos >= sesion.capacidad_maxima:
+                raise ValueError("La sesión está llena")
+
+            inscripcion = InscripcionSesion(
+                sesion_id=int(sesion_id),
+                estudiante_id=int(estudiante_id),
+                fecha_inscripcion=_now(),
+            )
+            db.add(inscripcion)
+            sesion.total_inscritos += 1
+
+            self._registrar_auditoria(db, str(estudiante_id), "INSCRIBIR_SESION",
+                                      f"Estudiante {estudiante_id} inscrito en sesión {sesion_id}")
+
+            db.commit()
+            db.refresh(inscripcion)
+            return self._serializar_inscripcion(inscripcion)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def iniciar_sesion(
+        self,
+        sesion_id: int | str,
+        usuario_id: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente inicia la sesión grupal."""
+        db = self._get_db()
+        try:
+            sesion = db.query(SesionTutoria).filter(
+                SesionTutoria.id == int(sesion_id)
+            ).first()
+            if not sesion:
+                raise ValueError("No existe la sesión")
+
+            if sesion.estado != "abierta":
+                raise ValueError(f"No se puede iniciar: estado actual '{sesion.estado}'")
+
+            sesion.estado = "en_curso"
+            sesion.fecha_inicio = _now()
+
+            self._registrar_auditoria(db, usuario_id, "INICIAR_SESION",
+                                      f"Sesión {sesion_id} iniciada")
+
+            db.commit()
+            db.refresh(sesion)
+            return self._serializar_sesion(sesion)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def finalizar_sesion(
+        self,
+        sesion_id: int | str,
+        usuario_id: str | None = None,
+        detalle: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente finaliza la sesión grupal y registra bitácora."""
+        db = self._get_db()
+        try:
+            sesion = db.query(SesionTutoria).filter(
+                SesionTutoria.id == int(sesion_id)
+            ).first()
+            if not sesion:
+                raise ValueError("No existe la sesión")
+
+            if sesion.estado != "en_curso":
+                raise ValueError(f"No se puede finalizar: estado actual '{sesion.estado}'")
+
+            sesion.estado = "atendida"
+            sesion.fecha_fin = _now()
+
+            solicitud = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.id == sesion.solicitud_id
+            ).first()
+            if solicitud:
+                solicitud.estado = "atendida"
+                solicitud.fecha_actualizacion = _now()
+
+            if detalle:
+                bitacora = BitacoraAtencion(
+                    solicitud_id=sesion.solicitud_id,
+                    observaciones=detalle,
+                    fecha_registro=_now(),
+                )
+                db.add(bitacora)
+
+            self._registrar_auditoria(db, usuario_id, "FINALIZAR_SESION",
+                                      f"Sesión {sesion_id} finalizada")
+
+            db.commit()
+            db.refresh(sesion)
+            return self._serializar_sesion(sesion)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def listar_sesiones_abiertas(
+        self,
+        asignatura_id: int | str | None = None,
+        materia_nombre: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista sesiones abiertas para que estudiantes se inscriban."""
+        db = self._get_db()
+        try:
+            query = db.query(SesionTutoria).filter(SesionTutoria.estado == "abierta")
+            if asignatura_id:
+                query = query.filter(SesionTutoria.asignatura_id == int(asignatura_id))
+            elif materia_nombre and self.admin_client:
+                try:
+                    asignaturas = self.admin_client._get(f"/asignaturas/")
+                    if isinstance(asignaturas, list):
+                        ids = [a.get("id") for a in asignaturas if materia_nombre.lower() in (a.get("nombre") or "").lower()]
+                        if ids:
+                            query = query.filter(SesionTutoria.asignatura_id.in_(ids))
+                except Exception:
+                    pass
+            sesiones = query.all()
+            return [self._serializar_sesion(s) for s in sesiones]
+        finally:
+            db.close()
+
+    def listar_sesiones_docente(
+        self,
+        docente_id: int | str,
+    ) -> List[Dict[str, Any]]:
+        """Lista todas las sesiones de un docente."""
+        db = self._get_db()
+        try:
+            sesiones = db.query(SesionTutoria).filter(
+                SesionTutoria.docente_id == int(docente_id)
+            ).all()
+            return [self._serializar_sesion(s) for s in sesiones]
+        finally:
+            db.close()
+
+    def listar_inscritos_sesion(
+        self,
+        sesion_id: int | str,
+    ) -> List[Dict[str, Any]]:
+        """Lista los estudiantes inscritos en una sesión."""
+        db = self._get_db()
+        try:
+            inscripciones = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == int(sesion_id)
+            ).all()
+            return [self._serializar_inscripcion(i) for i in inscripciones]
+        finally:
+            db.close()
+
+    def listar_solicitudes_pendientes_docente(
+        self,
+        docente_id: int | str,
+    ) -> List[Dict[str, Any]]:
+        """Solicitudes asignadas al docente que están pendientes de aceptar."""
+        db = self._get_db()
+        try:
+            solicitudes = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.docente_id == int(docente_id),
+                SolicitudTutoria.estado.in_(["solicitada", "asignada"]),
+            ).all()
+            return [self._serializar_solicitud(s) for s in solicitudes]
+        finally:
+            db.close()
+
+    # ── Admin: crear tutoría por nombre ──────────────────────────
+
+    def crear_sesion_admin(
+        self,
+        docente_id: int | str,
+        estudiante_id: int | str | None = None,
+        asignatura_id: int | str | None = None,
+        tema: str = "",
+        descripcion: str | None = None,
+        capacidad_maxima: int = 20,
+        fecha_agendada: str | None = None,
+        usuario_id: str | None = None,
+    ) -> Dict[str, Any]:
+        """Admin crea directamente una sesión de tutoría grupal."""
+        db = self._get_db()
+        try:
+            solicitud = SolicitudTutoria(
+                estudiante_id=int(estudiante_id) if estudiante_id else 0,
+                docente_id=int(docente_id),
+                asignatura_id=int(asignatura_id) if asignatura_id else None,
+                periodo_id=None,
+                tema=tema,
+                estado="confirmada",
+                fecha_solicitud=_now(),
+                fecha_actualizacion=_now(),
+            )
+            db.add(solicitud)
+            db.flush()
+
+            fa = None
+            if fecha_agendada:
+                try:
+                    fa = datetime.fromisoformat(fecha_agendada)
+                except ValueError:
+                    pass
+
+            sesion = SesionTutoria(
+                solicitud_id=solicitud.id,
+                docente_id=int(docente_id),
+                asignatura_id=int(asignatura_id) if asignatura_id else None,
+                tema=tema,
+                descripcion=descripcion or f"Sesión creada por administrador",
+                estado="abierta",
+                fecha_creacion=_now(),
+                fecha_agendada=fa,
+                capacidad_maxima=capacidad_maxima,
+                total_inscritos=0,
+            )
+            db.add(sesion)
+            db.flush()
+
+            solicitud.sesion_id = sesion.id
+
+            self._crear_historial(db, solicitud.id, None, "confirmada",
+                                  usuario_id=usuario_id, rol_usuario="admin",
+                                  comentario="Sesión creada por administrador")
+            self._registrar_auditoria(db, usuario_id, "CREAR_SESION_ADMIN",
+                                      f"Sesión #{sesion.id} creada por admin: {tema}")
+
+            db.commit()
+            db.refresh(sesion)
+            return self._serializar_sesion(sesion)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    # ── Docente: bitácora y asistencia de sesión ─────────────────
+
+    def registrar_bitacora_sesion(
+        self,
+        sesion_id: int | str,
+        detalle: str,
+        temas_detectados: str | None = None,
+        usuario_id: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente registra una bitácora para una sesión."""
+        db = self._get_db()
+        try:
+            sesion = db.query(SesionTutoria).filter(
+                SesionTutoria.id == int(sesion_id)
+            ).first()
+            if not sesion:
+                raise ValueError("No existe la sesión")
+
+            bitacora = BitacoraAtencion(
+                solicitud_id=sesion.solicitud_id,
+                observaciones=detalle,
+                temas_detectados=temas_detectados,
+                fecha_registro=_now(),
+            )
+            db.add(bitacora)
+
+            self._registrar_auditoria(db, usuario_id, "REGISTRAR_BITACORA_SESION",
+                                      f"Bitácora registrada para sesión {sesion_id}")
+
+            db.commit()
+            db.refresh(bitacora)
+            return {
+                "id": bitacora.id,
+                "sesion_id": int(sesion_id),
+                "observaciones": bitacora.observaciones,
+                "temas_detectados": bitacora.temas_detectados,
+                "fecha_registro": bitacora.fecha_registro.isoformat() if bitacora.fecha_registro else None,
+            }
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def registrar_asistencia_sesion(
+        self,
+        sesion_id: int | str,
+        estudiante_id: int | str,
+        asistio: bool,
+        usuario_id: str | None = None,
+    ) -> Dict[str, Any]:
+        """Docente registra asistencia de un estudiante en una sesión."""
+        db = self._get_db()
+        try:
+            inscripcion = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == int(sesion_id),
+                InscripcionSesion.estudiante_id == int(estudiante_id),
+            ).first()
+            if not inscripcion:
+                raise ValueError("El estudiante no está inscrito en esta sesión")
+
+            inscripcion.asistio = asistio
+
+            self._registrar_auditoria(db, usuario_id, "REGISTRAR_ASISTENCIA_SESION",
+                                      f"Asistencia de estudiante {estudiante_id} en sesión {sesion_id}: {'asistió' if asistio else 'no asistió'}")
+
+            db.commit()
+            return {
+                "sesion_id": int(sesion_id),
+                "estudiante_id": int(estudiante_id),
+                "asistio": asistio,
+            }
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()

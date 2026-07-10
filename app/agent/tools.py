@@ -128,4 +128,59 @@ def get_available_tools() -> list[ToolDefinition]:
             description="Las materias que imparte el docente y cuántos estudiantes tiene en cada una. Úsalo cuando el docente pregunte por sus asignaturas o sus estudiantes.",
             parameters=[],
         ),
+        ToolDefinition(
+            name="buscar_sesiones_abiertas",
+            description="Sesiones de tutoría abiertas a las que puedes unirte. Opcionalmente filtrar por materia.",
+            parameters=[
+                ToolParameter(name="materia_nombre", type="string", description="Nombre de la materia para filtrar (opcional)", required=False),
+            ],
+        ),
+        ToolDefinition(
+            name="inscribirse_sesion",
+            description="Inscribirse en una sesión de tutoría abierta.",
+            parameters=[
+                ToolParameter(name="sesion_id", type="integer", description="ID de la sesión", required=True),
+            ],
+        ),
+        ToolDefinition(
+            name="aceptar_solicitud_tutoria",
+            description="Docente acepta una solicitud de tutoría. Crea una sesión grupal abierta para que otros estudiantes se inscriban.",
+            parameters=[
+                ToolParameter(name="solicitud_id", type="integer", description="ID de la solicitud", required=True),
+                ToolParameter(name="capacidad_maxima", type="integer", description="Máximo de estudiantes (opcional, default 20)", required=False),
+            ],
+        ),
+        ToolDefinition(
+            name="rechazar_solicitud_tutoria",
+            description="Docente rechaza una solicitud de tutoría con un motivo.",
+            parameters=[
+                ToolParameter(name="solicitud_id", type="integer", description="ID de la solicitud", required=True),
+                ToolParameter(name="motivo", type="string", description="Motivo del rechazo", required=True),
+            ],
+        ),
+        ToolDefinition(
+            name="listar_sesiones_docente",
+            description="Todas las sesiones de tutoría del docente (abiertas, en curso, finalizadas).",
+            parameters=[],
+        ),
+        ToolDefinition(
+            name="listar_solicitudes_pendientes",
+            description="Solicitudes de tutoría pendientes de aceptar por el docente.",
+            parameters=[],
+        ),
+        ToolDefinition(
+            name="iniciar_sesion_tutoria",
+            description="Docente inicia una sesión de tutoría (cambia estado a en_curso).",
+            parameters=[
+                ToolParameter(name="sesion_id", type="integer", description="ID de la sesión", required=True),
+            ],
+        ),
+        ToolDefinition(
+            name="finalizar_sesion_tutoria",
+            description="Docente finaliza una sesión de tutoría y registra bitácora.",
+            parameters=[
+                ToolParameter(name="sesion_id", type="integer", description="ID de la sesión", required=True),
+                ToolParameter(name="detalle", type="string", description="Detalle de la sesión (opcional)", required=False),
+            ],
+        ),
     ]

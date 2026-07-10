@@ -383,6 +383,60 @@ class TutoriasClient:
         result = self._call("consultar_mis_tutorias", data)
         return result if isinstance(result, list) else []
 
+    def aceptar_solicitud(self, solicitud_id: int, docente_id: int,
+                          capacidad_maxima: int = 20,
+                          fecha_agendada: str | None = None) -> Optional[dict]:
+        return self._call("aceptar_solicitud", {
+            "solicitud_id": solicitud_id,
+            "docente_id": docente_id,
+            "capacidad_maxima": capacidad_maxima,
+            "fecha_agendada": fecha_agendada,
+        })
+
+    def rechazar_solicitud(self, solicitud_id: int, docente_id: int,
+                           motivo: str = "") -> Optional[dict]:
+        return self._call("rechazar_solicitud", {
+            "solicitud_id": solicitud_id,
+            "docente_id": docente_id,
+            "motivo": motivo,
+        })
+
+    def inscribir_en_sesion(self, sesion_id: int, estudiante_id: int) -> Optional[dict]:
+        return self._call("inscribir_en_sesion", {
+            "sesion_id": sesion_id,
+            "estudiante_id": estudiante_id,
+        })
+
+    def iniciar_sesion(self, sesion_id: int) -> Optional[dict]:
+        return self._call("iniciar_sesion", {
+            "sesion_id": sesion_id,
+        })
+
+    def finalizar_sesion(self, sesion_id: int, detalle: str | None = None) -> Optional[dict]:
+        return self._call("finalizar_sesion", {
+            "sesion_id": sesion_id,
+            "detalle": detalle,
+        })
+
+    def listar_sesiones_abiertas(self, asignatura_id: int | None = None) -> list[dict]:
+        data: dict[str, Any] = {}
+        if asignatura_id:
+            data["asignatura_id"] = asignatura_id
+        result = self._call("listar_sesiones_abiertas", data)
+        return result if isinstance(result, list) else []
+
+    def listar_sesiones_docente(self, docente_id: int) -> list[dict]:
+        result = self._call("listar_sesiones_docente", {"docente_id": docente_id})
+        return result if isinstance(result, list) else []
+
+    def listar_inscritos_sesion(self, sesion_id: int) -> list[dict]:
+        result = self._call("listar_inscritos_sesion", {"sesion_id": sesion_id})
+        return result if isinstance(result, list) else []
+
+    def listar_solicitudes_pendientes_docente(self, docente_id: int) -> list[dict]:
+        result = self._call("listar_solicitudes_pendientes_docente", {"docente_id": docente_id})
+        return result if isinstance(result, list) else []
+
 
 # ─── Factory functions ─────────────────────────────────────────────────────────
 

@@ -1,7 +1,8 @@
 import { api } from '@/services/api'
-import type { SolicitudTutoria, Notificacion } from '@/types/tutorias.types'
+import type { SolicitudTutoria, SesionTutoria, Notificacion } from '@/types/tutorias.types'
 
 export const tutoriasService = {
+  // --- Solicitudes ---
   listarSolicitudes: async (estudianteId?: number, periodoId?: number): Promise<SolicitudTutoria[]> => {
     const params: Record<string, any> = {}
     if (estudianteId != null) params.estudiante_id = estudianteId
@@ -30,6 +31,39 @@ export const tutoriasService = {
   atenderTutoria: async (id: number, asistio: boolean, detalle?: string): Promise<any> => {
     return api.tutorias.put(`/solicitudes/${id}/atender`, { asistio, detalle })
   },
+
+  // --- Sesiones ---
+  listarSesionesAbiertas: async (materiaNombre?: string): Promise<SesionTutoria[]> => {
+    const params: Record<string, any> = {}
+    if (materiaNombre) params.materia_nombre = materiaNombre
+    const data = await api.tutorias.get<any>('/sesiones/abiertas', { params })
+    return data.sesiones || []
+  },
+  inscribirseEnSesion: async (sesionId: number, estudianteId: number): Promise<any> => {
+    return api.tutorias.post(`/sesiones/${sesionId}/inscribir`, { estudiante_id: estudianteId })
+  },
+  listarSesionesDocente: async (docenteId: number): Promise<SesionTutoria[]> => {
+    const data = await api.tutorias.get<any>('/sesiones/docente', { params: { docente_id: docenteId } })
+    return data.sesiones || []
+  },
+  listarSolicitudesPendientes: async (docenteId: number): Promise<SolicitudTutoria[]> => {
+    const data = await api.tutorias.get<any>('/sesiones/solicitudes-pendientes', { params: { docente_id: docenteId } })
+    return data.solicitudes || []
+  },
+  aceptarSolicitud: async (solicitudId: number, usuarioId?: number): Promise<SesionTutoria> => {
+    return api.tutorias.put<SesionTutoria>(`/sesiones/aceptar/${solicitudId}`, { usuario_id: usuarioId })
+  },
+  rechazarSolicitud: async (solicitudId: number, motivo?: string, usuarioId?: number): Promise<any> => {
+    return api.tutorias.put(`/sesiones/rechazar/${solicitudId}`, { motivo, usuario_id: usuarioId })
+  },
+  iniciarSesion: async (sesionId: number): Promise<SesionTutoria> => {
+    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/iniciar`)
+  },
+  finalizarSesion: async (sesionId: number): Promise<SesionTutoria> => {
+    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/finalizar`)
+  },
+
+  // --- Notificaciones ---
   listarBitacorasEstudiante: async (estudianteId: number): Promise<{ cantidad: number; bitacoras: any[] }> => {
     return api.tutorias.get<any>(`/estudiantes/${estudianteId}/bitacoras`)
   },
@@ -43,5 +77,28 @@ export const tutoriasService = {
     const params: any = { docente_id: docenteId }
     if (periodoId) params.periodo_id = periodoId
     return api.tutorias.get<any>('/reportes/por-docente', { params })
+  },
+
+  // --- Admin: crear sesión directamente ---
+  crearSesionAdmin: async (data: {
+    docente_id: number; tema: string; estudiante_id?: number
+    asignatura_id?: number; descripcion?: string; capacidad_maxima?: number
+    fecha_agendada?: string
+  }): Promise<SesionTutoria> => {
+    return api.tutorias.post<SesionTutoria>('/sesiones/crear', data)
+  },
+
+  // --- Docente: bitácora y asistencia de sesión ---
+  registrarBitacoraSesion: async (sesionId: number, data: {
+    detalle: string; temas_detectados?: string
+  }): Promise<any> => {
+    return api.tutorias.post(`/sesiones/${sesionId}/bitacora`, data)
+  },
+  registrarAsistenciaSesion: async (sesionId: number, estudianteId: number, asistio: boolean): Promise<any> => {
+    return api.tutorias.post(`/sesiones/${sesionId}/asistencia`, { estudiante_id: estudianteId, asistio })
+  },
+  listarInscritosSesion: async (sesionId: number): Promise<any[]> => {
+    const data = await api.tutorias.get<any>(`/sesiones/${sesionId}/inscritos`)
+    return data.inscritos || []
   },
 }

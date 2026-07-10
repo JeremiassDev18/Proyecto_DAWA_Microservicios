@@ -365,6 +365,128 @@ class TutoriasWorker:
             self.publish_event('error', {'mensaje': str(e)})
             raise
 
+    # ── Handlers de sesiones grupales ────────────────────────────
+
+    def handle_aceptar_solicitud(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.aceptar_solicitud(
+                solicitud_id=data['solicitud_id'],
+                docente_id=data['docente_id'],
+                usuario_id=data.get('usuario_id'),
+                capacidad_maxima=data.get('capacidad_maxima', 20),
+                fecha_agendada=data.get('fecha_agendada'),
+            )
+            self.publish_event('solicitud_aceptada', resultado)
+            return resultado
+        except Exception as e:
+            logger.error(f"Error aceptando solicitud: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_rechazar_solicitud(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.rechazar_solicitud(
+                solicitud_id=data['solicitud_id'],
+                docente_id=data['docente_id'],
+                motivo=data.get('motivo', ''),
+                usuario_id=data.get('usuario_id'),
+            )
+            self.publish_event('solicitud_rechazada', resultado)
+            return resultado
+        except Exception as e:
+            logger.error(f"Error rechazando solicitud: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_inscribir_en_sesion(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.inscribir_en_sesion(
+                sesion_id=data['sesion_id'],
+                estudiante_id=data['estudiante_id'],
+            )
+            self.publish_event('inscripcion_registrada', resultado)
+            return resultado
+        except Exception as e:
+            logger.error(f"Error inscribiendo en sesión: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_iniciar_sesion(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.iniciar_sesion(
+                sesion_id=data['sesion_id'],
+                usuario_id=data.get('usuario_id'),
+            )
+            self.publish_event('sesion_iniciada', resultado)
+            return resultado
+        except Exception as e:
+            logger.error(f"Error iniciando sesión: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_finalizar_sesion(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.finalizar_sesion(
+                sesion_id=data['sesion_id'],
+                usuario_id=data.get('usuario_id'),
+                detalle=data.get('detalle'),
+            )
+            self.publish_event('sesion_finalizada', resultado)
+            return resultado
+        except Exception as e:
+            logger.error(f"Error finalizando sesión: {e}")
+            self.publish_event('error', {'mensaje': str(e)})
+            raise
+
+    def handle_listar_sesiones_abiertas(self, message):
+        try:
+            data = message.get('datos', {})
+            resultado = self.service.listar_sesiones_abiertas(
+                asignatura_id=data.get('asignatura_id'),
+            )
+            return resultado
+        except Exception as e:
+            logger.error(f"Error listando sesiones abiertas: {e}")
+            raise
+
+    def handle_listar_sesiones_docente(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.listar_sesiones_docente(
+                docente_id=data['docente_id'],
+            )
+            return resultado
+        except Exception as e:
+            logger.error(f"Error listando sesiones del docente: {e}")
+            raise
+
+    def handle_listar_inscritos_sesion(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.listar_inscritos_sesion(
+                sesion_id=data['sesion_id'],
+            )
+            return resultado
+        except Exception as e:
+            logger.error(f"Error listando inscritos: {e}")
+            raise
+
+    def handle_listar_solicitudes_pendientes_docente(self, message):
+        try:
+            data = message['datos']
+            resultado = self.service.listar_solicitudes_pendientes_docente(
+                docente_id=data['docente_id'],
+            )
+            return resultado
+        except Exception as e:
+            logger.error(f"Error listando solicitudes pendientes: {e}")
+            raise
+
     def process_message(self, ch, method, properties, body):
         """Procesar mensaje recibido"""
         try:
@@ -390,6 +512,15 @@ class TutoriasWorker:
                 'reporte_temas': self.handle_reporte_temas,
                 'consultar_mis_tutorias': self.handle_consultar_mis_tutorias,
                 'notificar_cambio': self.handle_notificar_cambio,
+                'aceptar_solicitud': self.handle_aceptar_solicitud,
+                'rechazar_solicitud': self.handle_rechazar_solicitud,
+                'inscribir_en_sesion': self.handle_inscribir_en_sesion,
+                'iniciar_sesion': self.handle_iniciar_sesion,
+                'finalizar_sesion': self.handle_finalizar_sesion,
+                'listar_sesiones_abiertas': self.handle_listar_sesiones_abiertas,
+                'listar_sesiones_docente': self.handle_listar_sesiones_docente,
+                'listar_inscritos_sesion': self.handle_listar_inscritos_sesion,
+                'listar_solicitudes_pendientes_docente': self.handle_listar_solicitudes_pendientes_docente,
             }
             
             handler = handlers.get(event_type)

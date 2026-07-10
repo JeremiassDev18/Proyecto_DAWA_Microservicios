@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text,
+    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Float,
 )
 from sqlalchemy.orm import relationship
 
@@ -28,10 +28,47 @@ class SolicitudTutoria(Base):
     fecha_agendada = Column(DateTime, nullable=True)
     fecha_actualizacion = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
     motivo_cancelacion = Column(Text, nullable=True)
+    motivo_rechazo = Column(Text, nullable=True)
+    sesion_id = Column(Integer, ForeignKey("sesiones_tutoria.id"), nullable=True)
 
     bitacoras = relationship("BitacoraAtencion", back_populates="solicitud", cascade="all, delete-orphan")
     historial = relationship("HistorialEstado", back_populates="solicitud", cascade="all, delete-orphan")
     notificaciones = relationship("Notificacion", back_populates="solicitud", cascade="all, delete-orphan")
+    sesion = relationship("SesionTutoria", foreign_keys="[SolicitudTutoria.sesion_id]", viewonly=True)
+
+
+class SesionTutoria(Base):
+    __tablename__ = "sesiones_tutoria"
+
+    id = Column(Integer, primary_key=True, index=True)
+    solicitud_id = Column(Integer, ForeignKey("solicitudes_tutoria.id"), nullable=False)
+    docente_id = Column(Integer, nullable=False)
+    asignatura_id = Column(Integer, nullable=True)
+    tema = Column(String(200), nullable=False)
+    descripcion = Column(Text, nullable=True)
+    estado = Column(String(30), nullable=False, default="confirmada")
+    fecha_creacion = Column(DateTime, nullable=False, default=_utcnow)
+    fecha_agendada = Column(DateTime, nullable=True)
+    fecha_inicio = Column(DateTime, nullable=True)
+    fecha_fin = Column(DateTime, nullable=True)
+    capacidad_maxima = Column(Integer, nullable=False, default=20)
+    total_inscritos = Column(Integer, nullable=False, default=0)
+
+    solicitud = relationship("SolicitudTutoria", foreign_keys="[SesionTutoria.solicitud_id]", viewonly=True)
+    inscripciones = relationship("InscripcionSesion", back_populates="sesion", cascade="all, delete-orphan")
+
+
+class InscripcionSesion(Base):
+    __tablename__ = "inscripciones_sesion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sesion_id = Column(Integer, ForeignKey("sesiones_tutoria.id"), nullable=False)
+    estudiante_id = Column(Integer, nullable=False)
+    fecha_inscripcion = Column(DateTime, nullable=False, default=_utcnow)
+    asistio = Column(Boolean, nullable=True)
+    observaciones = Column(Text, nullable=True)
+
+    sesion = relationship("SesionTutoria", back_populates="inscripciones")
 
 
 class BitacoraAtencion(Base):
