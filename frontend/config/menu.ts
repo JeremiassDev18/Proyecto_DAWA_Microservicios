@@ -1,5 +1,5 @@
 import {
-  Dashboard, Chat, Dataset, Psychology, Assessment,
+  Dashboard, Chat, Assessment,
   Pending, People, School, CalendarToday, Book, Assignment, Description, Settings,
 } from '@mui/icons-material'
 import { ROUTES } from './routes'
@@ -15,8 +15,6 @@ export interface MenuItem {
 export const menuItems: MenuItem[] = [
   { icon: Dashboard, label: 'Dashboard', path: ROUTES.HOME },
   { icon: Chat, label: 'Chat', path: ROUTES.CHAT },
-  { icon: Dataset, label: 'Dataset', path: ROUTES.DATASET, roles: [ROLES.ADMIN] },
-  { icon: Psychology, label: 'Entrenamiento', path: ROUTES.ENTRENAMIENTO, roles: [ROLES.ADMIN] },
   { icon: Assessment, label: 'Métricas', path: ROUTES.METRICAS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
   { icon: Pending, label: 'Pendientes IA', path: ROUTES.PENDIENTES, roles: [ROLES.ADMIN] },
   { icon: People, label: 'Administración', path: ROUTES.ADMIN_USUARIOS, roles: [ROLES.ADMIN] },

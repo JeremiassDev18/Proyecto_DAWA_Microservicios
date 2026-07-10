@@ -146,6 +146,7 @@ ON CONFLICT (nombre_rol) DO NOTHING;
 INSERT INTO usuarios (email, password_hash, nombre)
 VALUES
     ('admin@sistema.com',  '$argon2id$v=19$m=65536,t=3,p=4$jandSQ0pGTLCWyLQv2+WlA$KIPMWE8F5wSBEmjrMPHr6LQIFqDI2aBonEB+lof3m8Q', 'Admin Sistema'),
+    ('admin@chatbot.com',  '$argon2id$v=19$m=65536,t=3,p=4$Ke0pZH4sXeH001KAYIKQsg$eKn7vjKBJ9fQ4MOCl4atsxrnGgk8VYAjOCPF/CELBvI', 'Admin Chatbot'),
     ('jeremias@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$PE2E+C8J7t0c6tk+UYuY2g$Hr0Tvr07HyBEae3m2oyHOkIT5F6LsG3hi4FzOhZ4RSk', 'Jeremías Prueba'),
     ('profesor@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$ypCpKdHuhcrQBWm/28SW9A$yDB3KsJ7r8/RofDJiEHI3Q4MgoNipUcmpP1eHk9bI4E', 'Profesor Prueba')
 ON CONFLICT (email) DO NOTHING;
@@ -169,4 +170,15 @@ ON CONFLICT DO NOTHING;
 INSERT INTO usuarios_roles (usuario_id, rol_id)
 SELECT u.id, r.id FROM usuarios u, roles r
 WHERE u.email = 'profesor@test.com' AND r.nombre_rol = 'profesor'
+ON CONFLICT DO NOTHING;
+
+-- admin@chatbot.com: admin + profesor (como el admin original)
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'admin@chatbot.com' AND r.nombre_rol = 'admin'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email = 'admin@chatbot.com' AND r.nombre_rol = 'profesor'
 ON CONFLICT DO NOTHING;

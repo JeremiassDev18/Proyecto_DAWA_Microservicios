@@ -8,16 +8,14 @@ El servicio permite responder preguntas frecuentes, realizar búsquedas document
 
 # Características
 
-- Clasificación de intenciones mediante SetFit.
-- Búsqueda híbrida (texto + embeddings).
-- Motor RAG sobre documentos institucionales.
-- Gestión de FAQs.
+- Agente conversacional con LLM local (Qwen 2.5 3B vía Ollama).
+- Tool calling: el LLM decide cuándo consultar perfil, materias, tutorías o conocimiento institucional.
+- Memoria por conversación en RAM + persistencia en PostgreSQL.
+- RAG agentic sobre el Centro de Conocimiento (búsqueda híbrida pgvector + pg_trgm).
+- Centro de Conocimiento administrable para normas, reglamentos, FAQs y procedimientos.
 - Registro completo de conversaciones.
 - Feedback del usuario.
-- Escalamiento automático cuando la IA no posee suficiente confianza.
-- Entrenamiento del modelo desde API.
-- Arquitectura basada en servicios y handlers.
-- Integración preparada para microservicios externos.
+- Integración con microservicios de Administración, Tutorías y Seguridad.
 
 ---
 
@@ -25,12 +23,11 @@ El servicio permite responder preguntas frecuentes, realizar búsquedas document
 
 - Python 3.11
 - FastAPI
-- PostgreSQL
-- pgvector
-- Docker
-- Docker Compose
-- Sentence Transformers
-- SetFit
+- PostgreSQL 16 + pgvector + pg_trgm
+- Docker / Docker Compose
+- Ollama (motor LLM)
+- Qwen 2.5 3B
+- Sentence Transformers (MiniLM para embeddings)
 - PyTorch
 
 ---
@@ -40,27 +37,30 @@ El servicio permite responder preguntas frecuentes, realizar búsquedas document
 ```
 app/
 │
+├── agent/              # Agente LLM, planner, memoria, tools y adapters
+│   ├── adapters/
+│   ├── agent.py
+│   ├── planner.py
+│   ├── memory.py
+│   ├── ollama_client.py
+│   ├── prompt.py
+│   ├── tools.py
+│   └── tool_validator.py
 ├── api/
 ├── controllers/
 ├── core/
 ├── db/
-├── ml/
+├── ml/                 # Embeddings (MiniLM / sentence-transformers)
 ├── schemas/
 ├── services/
-│   ├── handlers/
-│   ├── dispatcher.py
-│   ├── rag_service.py
-│   ├── search_service.py
-│   └── chat_orchestrator.py
-│
+│   └── agent_orchestrator.py
 ├── utils/
 └── main.py
 
-scripts/
 tests/
-data/
 docker-compose.yml
 requirements.txt
+init.sql
 ```
 
 ---
@@ -101,15 +101,35 @@ Crear el archivo
 Ejemplo
 
 ```env
-DB_HOST=postgres
+DB_HOST=chatbot-db
 DB_PORT=5432
 DB_NAME=chatbot
 DB_USER=postgres
 DB_PASSWORD=postgres
 
-CONFIDENCE_THRESHOLD=0.6
-RAG_SIMILARITY_THRESHOLD=0.20
-ESCALATION_ENABLED=true
+INTERNAL_TOKEN=change_me_in_production
+
+# Motor LLM
+AI_ENGINE=qwen
+OLLAMA_HOST=http://ollama:11434
+OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_TIMEOUT=30
+OLLAMA_MAX_TOOL_ITERATIONS=3
+
+# RAG
+RAG_TOP_K=5
+RAG_CANDIDATES=20
+RAG_MIN_SCORE=0.35
+RAG_VECTOR_WEIGHT=0.80
+RAG_TEXT_WEIGHT=0.20
+
+# Microservicios
+ADMIN_SERVICE_URL=http://administracion:5001
+TUTORIAS_SERVICE_URL=http://tutorias:5003
+SECURITY_SERVICE_URL=http://security:5000
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_QUEUE_SOLICITUDES=tutorias.solicitudes
+RABBITMQ_QUEUE_EVENTOS=tutorias.eventos
 ```
 
 ---
@@ -146,50 +166,44 @@ durante la creación del contenedor de PostgreSQL.
 
 Este script crea:
 
-- tablas
-- intenciones
-- respuestas
-- documentos base
-- dataset inicial
+- tablas de conversaciones, mensajes, feedback y preguntas pendientes
+- tabla `centro_conocimiento` para el RAG
+- tabla `agente_memoria` para persistir el contexto del agente LLM
+- función `buscar_conocimiento_hibrido` (pgvector + pg_trgm)
+- datos iniciales de ejemplo en el centro de conocimiento
 
 ---
 
-# Entrenar el modelo
+# Configurar Ollama
 
-La primera vez es necesario entrenar el modelo.
-
-```
-POST
-
-/api/v1/train
-```
-
-o mediante Swagger.
-
-Una vez entrenado, el modelo queda almacenado en
-
-```
-data/setfit_model/
-```
-
-y permanece disponible gracias al volumen de Docker.
-
-No es necesario volver a entrenar después de reiniciar los contenedores.
-
-Únicamente deberá reentrenarse cuando:
-
-- se agreguen nuevas intenciones
-- se modifique el dataset
-- se validen nuevas preguntas
-
----
-
-# Generar embeddings
-
-Si se agregan documentos nuevos se recomienda regenerar embeddings.
+El contenedor `ollama` se levanta automáticamente con `docker compose up`.
+La primera vez debes descargar el modelo:
 
 ```bash
-python scripts/generate_embeddings.py
+docker exec -it ollama ollama pull qwen2.5:3b
+```
+
+En Windows con Docker Desktop asegúrate de asignar al menos **6 GB de RAM** a WSL2 para evitar errores de memoria al cargar el modelo.
+
+---
+
+# Centro de Conocimiento (RAG)
+
+Los administradores pueden gestionar fragmentos de conocimiento en:
+
+```
+/api/v1/knowledge
+```
+
+Cada entrada genera automáticamente un embedding con MiniLM.
+Para probar qué recupera el RAG y qué respondería el agente:
+
+```
+POST /api/v1/knowledge/test
+{
+  "consulta": "¿Cómo cancelo una tutoría?",
+  "top_k": 5
+}
 ```
 
 ---
@@ -202,7 +216,7 @@ python scripts/generate_embeddings.py
 POST /api/v1/chat
 ```
 
----
+Procesa el mensaje a través del agente LLM.
 
 ## Feedback
 
@@ -210,40 +224,30 @@ POST /api/v1/chat
 POST /api/v1/chat/feedback
 ```
 
----
-
-## Entrenamiento
+## Agente (debug)
 
 ```
-POST /api/v1/train
+GET  /api/v1/agent/health
+POST /api/v1/agent/llm-test
 ```
 
----
-
-## Dataset
+## Centro de Conocimiento
 
 ```
-GET    /api/v1/dataset
-POST   /api/v1/dataset
-PUT    /api/v1/dataset
-DELETE /api/v1/dataset
+GET    /api/v1/knowledge
+GET    /api/v1/knowledge/{id}
+POST   /api/v1/knowledge
+PUT    /api/v1/knowledge/{id}
+DELETE /api/v1/knowledge/{id}
+POST   /api/v1/knowledge/test
 ```
 
----
-
-## Documentos
+## Admin
 
 ```
-GET
-POST
-PUT
-DELETE
-```
-
-sobre
-
-```
-/api/v1/documents
+GET /api/v1/pending
+GET /api/v1/metrics/usage
+GET /api/v1/summary/conversations
 ```
 
 ---
@@ -254,64 +258,68 @@ sobre
 Usuario
       │
       ▼
-Router
+/api/v1/chat
       │
       ▼
-Chat Orchestrator
+Agent Orchestrator
+      │
+      ├── Carga/crea conversación y memoria
       │
       ▼
-Clasificador SetFit
+Agent LLM (Qwen vía Ollama)
+      │
+      ├── Tool calling: consultar_perfil, consultar_materias,
+      │   consultar_tutorias, crear_tutoria, cancelar_tutoria,
+      │   buscar_conocimiento
       │
       ▼
-Dispatcher
-      │
-      ├── External Handler
-      │
-      ├── FAQ Handler
-      │
-      ├── Hybrid Handler
-      │
-      ├── RAG Handler
-      │
-      └── Fallback Handler
+Adapters → microservicios / centro_conocimiento
       │
       ▼
-Validador
+Respuesta natural redactada por el LLM
       │
       ▼
-Respuesta al usuario
+Persistencia en chatbot_mensaje + agente_memoria
+      │
+      ▼
+Usuario
 ```
 
 ---
 
 # Arquitectura
 
-El proyecto está dividido en cinco módulos principales.
+El proyecto está dividido en los siguientes módulos.
 
 ## API
 
 Expone todos los endpoints REST.
 
+## Agente (`app/agent/`)
+
+- `agent.py`: fachada principal.
+- `planner.py`: ciclo LLM → tool → LLM.
+- `memory.py`: historial de mensajes y estado de conversación.
+- `ollama_client.py`: cliente del motor LLM.
+- `tools.py`: definición de herramientas disponibles.
+- `tool_validator.py`: parseo y validación de llamadas a tool.
+- `adapters/`: ejecutan herramientas reutilizando microservice_client.
+
 ## ML
 
-Contiene:
-
-- entrenamiento
-- predicción
-- embeddings
-- vectorización
+Generación de embeddings con MiniLM (`sentence-transformers`) para el RAG.
 
 ## Services
 
-Implementa toda la lógica del chatbot mediante handlers especializados.
+`agent_orchestrator.py` orquesta el procesamiento de mensajes, la persistencia de memoria y el registro de mensajes.
 
 ## Database
 
-Acceso a PostgreSQL y consultas SQL.
+Acceso a PostgreSQL, pgvector y consultas SQL.
 
 ## Controllers
 
-Orquesta la administración del dataset y documentos.
+`knowledge_controller.py` gestiona el Centro de Conocimiento.
 
 ---
 
@@ -345,13 +353,7 @@ Actualmente el proyecto cuenta con más de 100 pruebas automatizadas.
 
 # Notas
 
-El modelo entrenado y los artefactos generados no se almacenan en Git.
-
-Se regeneran mediante:
-
-```
-POST /api/v1/train
-```
+El modelo LLM (Qwen) se ejecuta dentro del contenedor de Ollama y no se almacena en Git. Los embeddings se generan automáticamente al crear o actualizar entradas del Centro de Conocimiento.
 
 ---
 
@@ -372,24 +374,20 @@ El proyecto ignora automáticamente:
 
 Características implementadas:
 
-- Clasificación de intenciones
-- FAQ
-- RAG
-- Búsqueda híbrida
-- Feedback
-- Gestión documental
-- Entrenamiento desde API
-- Dispatcher basado en handlers
+- Agente conversacional con LLM local (Qwen 2.5 3B)
+- Tool calling con validación y reintentos
+- Memoria persistente por conversación
+- RAG agentic sobre Centro de Conocimiento
+- Centro de Conocimiento administrable
+- Feedback de usuarios
 - Registro histórico de conversaciones
-- Escalamiento automático
-- Dashboard preparado para métricas
+- Métricas de uso por tipo de resolución
+- Integración con microservicios de Administración, Tutorías y Seguridad
 
 Pendiente de integración:
 
-- Microservicio de Tutorías
-- Microservicio Académico
-- Microservicio de Usuarios
 - API Gateway
+- Autenticación unificada entre microservicios
 
 ---
 

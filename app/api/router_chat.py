@@ -1,38 +1,58 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import verificar_token, AuthContext
 from app.core.dependencies import get_db
 from app.core.context import estudiante_id_ctx
 from app.schemas.requests import ChatRequest, FeedbackRequest
 from app.schemas.responses import (
-    ChatResponse, FeedbackResponse, FeedbackStatusResponse,
+    ChatResponse, FeedbackResponse, FeedbackStatusResponse, MessageResponse,
+    ConversationResponse,
 )
 from app.db import queries as db_queries
-from app.services.chat_orchestrator import process_message
-from app.services.microservice_client import get_security_client
+from app.services.agent_orchestrator import process_message_agent
 from app.utils.logger import logger
 
 router = APIRouter(tags=["chat"])
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, conn=Depends(get_db)):
+def chat(
+    req: ChatRequest,
+    conn=Depends(get_db),
+    auth: AuthContext = Depends(verificar_token),
+):
     logger.info(f"Chat desde usuario {req.usuario_id}: {req.mensaje[:50]}...")
 
-    token = estudiante_id_ctx.set(req.estudiante_id)
-    try:
-        user_context = {}
+    # Auto-resolver estudiante_id si no viene en el request pero el usuario es estudiante.
+    estudiante_id = req.estudiante_id
+    if estudiante_id is None and auth.tipo == "estudiante" and auth.email:
         try:
-            client = get_security_client()
-            user_data = client.get_usuario(req.usuario_id)
-            if user_data:
-                user_context["nombre"] = user_data.get("nombre") or user_data.get("nombres", "")
-                user_context["carrera"] = user_data.get("carrera", "")
+            from app.services.microservice_client import get_admin_client
+            admin = get_admin_client()
+            estudiantes = admin._get("/api/administracion/estudiantes/") or []
+            for est in estudiantes:
+                if est.get("correo", "").lower() == auth.email.lower():
+                    estudiante_id = est.get("id")
+                    logger.info(f"[ChatRouter] estudiante_id auto-resuelto: {estudiante_id} para email {auth.email}")
+                    break
         except Exception as e:
-            logger.warning(f"No se pudo obtener datos del usuario {req.usuario_id}: {e}")
+            logger.warning(f"[ChatRouter] no se pudo auto-resolver estudiante_id: {e}")
 
-        result = process_message(
-            conn, req.usuario_id, req.mensaje, req.id_conversacion,
-            nombre_cliente=user_context.get("nombre", req.nombre),
+    token = estudiante_id_ctx.set(estudiante_id)
+    try:
+        # Normalizar rol desde JWT: estudiante, admin, docente u otro.
+        rol = auth.tipo if auth.tipo in ("estudiante", "admin", "docente") else "estudiante"
+        result = process_message_agent(
+            conn,
+            usuario_id=req.usuario_id,
+            mensaje=req.mensaje,
+            id_conversacion=req.id_conversacion,
+            nombre_cliente=req.nombre,
+            nueva_conversacion=req.nueva_conversacion,
+            estudiante_id=estudiante_id,
+            carrera_id=req.carrera_id,
+            periodo_id=req.periodo_id,
+            rol=rol,
         )
 
         return ChatResponse(**result)
@@ -78,3 +98,41 @@ def feedback_status(id_mensaje: int, conn=Depends(get_db)):
         id_mensaje=id_mensaje,
         feedback_exists=False,
     )
+
+
+@router.get("/conversations", response_model=list[ConversationResponse])
+def get_user_conversations(usuario_id: int, conn=Depends(get_db)):
+    rows = db_queries.get_conversaciones_by_usuario(conn, usuario_id, limit=5)
+    return [
+        ConversationResponse(
+            id=row[0],
+            id_usuario=row[1],
+            nombre_cliente=row[2],
+            activa=row[3],
+            iniciado_en=row[4],
+            finalizado_en=row[5],
+        )
+        for row in rows
+    ]
+
+
+@router.get("/conversations/{id_conversacion}/messages", response_model=list[MessageResponse])
+def get_conversation_messages(id_conversacion: int, conn=Depends(get_db)):
+    conv = db_queries.get_conversacion(conn, id_conversacion)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
+    rows = db_queries.get_mensajes_by_conversacion(conn, id_conversacion)
+    return [
+        MessageResponse(
+            id=row[0],
+            id_conversacion=id_conversacion,
+            rol=row[1],
+            contenido=row[2],
+            tipo_resolucion=row[3],
+            confianza_ml=float(row[5]) if row[5] is not None else None,
+            modelo_usado=row[6],
+            enviado_en=row[7],
+        )
+        for row in rows
+    ]

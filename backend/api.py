@@ -13,14 +13,27 @@ logger = logging.getLogger(__name__)
 PUBLIC_PATHS = {"/api/tutorias/health"}
 
 
+def _is_public(path: str) -> bool:
+    """Verifica si el path es público (match exacto o por prefijo)."""
+    if path in PUBLIC_PATHS:
+        return True
+    if path.startswith("/api/tutorias/estudiantes/") and path.endswith("/bitacoras"):
+        return True
+    if path.startswith("/api/tutorias/bitacoras/"):
+        return True
+    return False
+
+
 def create_app(service: Any) -> Flask:
     app = Flask(__name__)
     CORS(app)
 
     @app.before_request
     def check_auth():
+        if request.method == "OPTIONS":
+            return None
         path = request.path.rstrip("/")
-        if path in PUBLIC_PATHS:
+        if _is_public(path):
             return None
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
@@ -98,11 +111,12 @@ def create_app(service: Any) -> Flask:
     @app.route("/api/tutorias/solicitudes", methods=["GET"])
     def listar_solicitudes():
         estudiante_id = request.args.get("estudiante_id")
-        if not estudiante_id:
-            return jsonify({"error": "Parámetro estudiante_id requerido"}), 400
+        periodo_id = request.args.get("periodo_id")
         try:
-            periodo_id = request.args.get("periodo_id")
-            resultado = service.consultar_tutorias_por_estudiante(estudiante_id, periodo_id)
+            if estudiante_id:
+                resultado = service.consultar_tutorias_por_estudiante(estudiante_id, periodo_id)
+            else:
+                resultado = service.listar_todas_solicitudes(periodo_id)
             return jsonify({
                 "cantidad": len(resultado),
                 "solicitudes": resultado,

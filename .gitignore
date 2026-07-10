@@ -21,8 +21,7 @@ env/
 *.swo
 *~
 
-# === ML / Model artifacts (regenerables con retrain) ===
-data/setfit_model/
+# === ML / embeddings cache ===
 data/*.pkl
 data/*.joblib
 data/*.npy
@@ -31,9 +30,6 @@ data/*.npz
 
 # === Model weights ===
 *.safetensors
-
-# === Script data ===
-scripts/data/
 
 # === Cache, logs, DB ===
 *.log

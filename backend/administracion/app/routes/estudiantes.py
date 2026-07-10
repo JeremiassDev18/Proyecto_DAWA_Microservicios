@@ -47,6 +47,13 @@ def obtener_estudiante(id):
         if not estudiante:
             return jsonify({"error": "Estudiante no encontrado"}), 404
 
+        carrera = db.query(Carrera).filter(
+            Carrera.id == estudiante.carrera_id
+        ).first()
+        periodo = db.query(PeriodoAcademico).filter(
+            PeriodoAcademico.id == estudiante.periodo_id
+        ).first()
+
         return jsonify({
             "id": estudiante.id,
             "nombres": estudiante.nombres,
@@ -54,7 +61,11 @@ def obtener_estudiante(id):
             "correo": estudiante.correo,
             "matricula": estudiante.matricula,
             "carrera_id": estudiante.carrera_id,
+            "carrera_nombre": carrera.nombre if carrera else None,
+            "facultad_nombre": carrera.facultad.nombre if carrera and carrera.facultad else None,
             "periodo_id": estudiante.periodo_id,
+            "periodo_nombre": periodo.nombre if periodo else None,
+            "nivel": estudiante.nivel,
             "estado_academico": estudiante.estado_academico,
             "estado": estudiante.estado,
             "fecha_creacion": str(estudiante.fecha_creacion)
@@ -109,6 +120,7 @@ def crear_estudiante():
             matricula=data.get("matricula"),
             carrera_id=data.get("carrera_id"),
             periodo_id=data.get("periodo_id"),
+            nivel=data.get("nivel", "Primero"),
             estado_academico=estado_academico,
             estado=True
         )
@@ -134,6 +146,7 @@ def crear_estudiante():
                 "matricula": nuevo_estudiante.matricula,
                 "carrera_id": nuevo_estudiante.carrera_id,
                 "periodo_id": nuevo_estudiante.periodo_id,
+                "nivel": nuevo_estudiante.nivel,
                 "estado_academico": nuevo_estudiante.estado_academico,
                 "estado": nuevo_estudiante.estado,
                 "fecha_creacion": str(nuevo_estudiante.fecha_creacion)
@@ -168,6 +181,9 @@ def actualizar_estudiante(id):
         estudiante.apellidos = data.get("apellidos", estudiante.apellidos)
         estudiante.correo = data.get("correo", estudiante.correo)
         estudiante.matricula = data.get("matricula", estudiante.matricula)
+
+        if data.get("nivel"):
+            estudiante.nivel = data.get("nivel")
 
         if data.get("estado_academico"):
             estado_academico = data.get("estado_academico").lower()

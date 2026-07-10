@@ -4,8 +4,6 @@ export const ROUTES = {
   RECOVER_PASSWORD: '/recuperar-password',
   CHAT: '/chat',
   TUTORIAS: '/tutorias',
-  DATASET: '/dataset',
-  ENTRENAMIENTO: '/entrenamiento',
   METRICAS: '/metricas',
   PENDIENTES: '/pendientes',
   PERFIL: '/perfil',

@@ -17,18 +17,30 @@ def listar_docentes():
 
         materia = request.args.get("materia", "").strip()
         if materia:
-            query = query.join(Paralelo, Paralelo.docente_id == Docente.id)\
-                         .join(Asignatura, Asignatura.id == Paralelo.asignatura_id)\
-                         .filter(func.unaccent(Asignatura.nombre).ilike(func.unaccent(f"%{materia}%")))\
-                         .distinct()
+            try:
+                query = query.join(Paralelo, Paralelo.docente_id == Docente.id)\
+                             .join(Asignatura, Asignatura.id == Paralelo.asignatura_id)\
+                             .filter(func.unaccent(Asignatura.nombre).ilike(func.unaccent(f"%{materia}%")))\
+                             .distinct()
+            except Exception:
+                query = query.join(Paralelo, Paralelo.docente_id == Docente.id)\
+                             .join(Asignatura, Asignatura.id == Paralelo.asignatura_id)\
+                             .filter(Asignatura.nombre.ilike(f"%{materia}%"))\
+                             .distinct()
 
         search = request.args.get("search", "").strip()
         if search:
             for term in search.split():
-                query = query.filter(
-                    func.unaccent(Docente.nombres).ilike(func.unaccent(f"%{term}%")) |
-                    func.unaccent(Docente.apellidos).ilike(func.unaccent(f"%{term}%"))
-                )
+                try:
+                    query = query.filter(
+                        func.unaccent(Docente.nombres).ilike(func.unaccent(f"%{term}%")) |
+                        func.unaccent(Docente.apellidos).ilike(func.unaccent(f"%{term}%"))
+                    )
+                except Exception:
+                    query = query.filter(
+                        Docente.nombres.ilike(f"%{term}%") |
+                        Docente.apellidos.ilike(f"%{term}%")
+                    )
 
         docentes = query.all()
         resultado = []

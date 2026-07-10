@@ -566,6 +566,20 @@ class TutoriasService:
         finally:
             db.close()
 
+    def listar_todas_solicitudes(
+        self,
+        periodo_id: int | str | None = None,
+    ) -> List[Dict[str, object]]:
+        """Retorna todas las solicitudes de tutoría (sin filtro por estudiante)."""
+        db = self._get_db()
+        try:
+            query = db.query(SolicitudTutoria)
+            if periodo_id:
+                query = query.filter(SolicitudTutoria.periodo_id == int(periodo_id))
+            return [self._serializar_solicitud(s) for s in query.all()]
+        finally:
+            db.close()
+
     def consultar_mis_bitacoras(self, estudiante_id: int | str) -> List[Dict[str, object]]:
         db = self._get_db()
         try:

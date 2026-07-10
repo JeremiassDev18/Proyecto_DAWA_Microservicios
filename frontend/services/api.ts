@@ -113,6 +113,8 @@ export const api = {
       getServiceClient('chatbot').post<T>(url, data, config).then((r) => r.data),
     put: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
       getServiceClient('chatbot').put<T>(url, data, config).then((r) => r.data),
+    patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+      getServiceClient('chatbot').patch<T>(url, data, config).then((r) => r.data),
     delete: <T>(url: string, config?: AxiosRequestConfig) =>
       getServiceClient('chatbot').delete<T>(url, config).then((r) => r.data),
   },

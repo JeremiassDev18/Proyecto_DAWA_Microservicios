@@ -6,4 +6,5 @@ def get_db() -> Generator:
     try:
         yield conn
     finally:
+        conn.rollback()
         release_connection(conn)   

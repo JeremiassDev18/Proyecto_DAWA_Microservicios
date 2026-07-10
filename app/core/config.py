@@ -26,24 +26,24 @@ class Settings(BaseSettings):
     # Seguridad interna
     INTERNAL_TOKEN: str = "internal_secret_token_xyz"
 
-    # Configuración ML
-    SIMILARITY_THRESHOLD: float = 0.25
-    VECTOR_WEIGHT: float = 0.70
-    TRGM_WEIGHT: float = 0.30
+    # Motor de IA: "setfit" (legacy) o "qwen" (agente LLM)
+    AI_ENGINE: str = "qwen"
+
+    # Configuración Ollama / agente LLM
+    OLLAMA_HOST: str = "http://ollama:11434"
+    OLLAMA_MODEL: str = "qwen2.5:3b"
+    OLLAMA_TIMEOUT: int = 30
+    OLLAMA_MAX_TOOL_ITERATIONS: int = 3
+
+    # Embeddings (MiniLM para RAG)
     MODEL_NAME: str = "all-MiniLM-L6-v2"
 
-    # Umbral de confianza para respuesta directa vs escalamiento
-    CONFIDENCE_THRESHOLD: float = 0.60
-    ESCALATION_ENABLED: bool = True
-
-    # Reentrenamiento inteligente
-    AUTO_TRAIN: bool = True
-    AUTO_TRAIN_THRESHOLD: int = 100
-
-    # RAG
-    RAG_TOP_K: int = 3
-    RAG_SIMILARITY_THRESHOLD: float = 0.35
-    RAG_HIGH_CONFIDENCE: float = 0.35
+    # RAG (Agentic RAG)
+    RAG_TOP_K: int = 5                # documentos finales que recibe el LLM
+    RAG_CANDIDATES: int = 20          # candidatos a recuperar de pgvector
+    RAG_MIN_SCORE: float = 0.35       # umbral de corte por calidad
+    RAG_VECTOR_WEIGHT: float = 0.80   # peso del embedding
+    RAG_TEXT_WEIGHT: float = 0.20     # peso de pg_trgm
 
     @property
     def DATABASE_URL(self) -> str:

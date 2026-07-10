@@ -2,77 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.dependencies import get_db
 from app.core.auth import requerir_admin
-from app.schemas.requests import PendingConvertRequest
 from app.schemas.responses import (
-    ConversationSummary, DatasetResponse, ModelMetrics, PendingConvertResponse,
-    PendingItem, PendingList, PredictionItem, TaskInfo, UsageMetricsResponse,
+    ConversationSummary, PendingItem, PendingListResponse, UsageMetricsResponse,
 )
 from app.db import queries as db_queries
-from app.db.training_repository import get_training_data
-from app.controllers.dataset_controller import create_dataset
 
 from app.utils.pagination import paginate
+from app.utils.logger import logger
 
 router = APIRouter(tags=["admin"])
 
 
-@router.post("/train", status_code=202, response_model=TaskInfo)
-def train(conn=Depends(get_db)):
-    texts, labels = get_training_data(conn)
-    if not texts:
-        return TaskInfo(
-            task_id=0,
-            status="no_data",
-            mensaje="No hay datos de entrenamiento validados",
-        )
-
-    task_id = enqueue_training(texts, labels)
-    if task_id is None:
-        return TaskInfo(
-            task_id=0,
-            status="already_training",
-            mensaje="Ya hay un entrenamiento en progreso. Espera a que termine.",
-        )
-    logger.info(f"Entrenamiento encolado: task_id={task_id}, {len(texts)} ejemplos")
-    return TaskInfo(
-        task_id=task_id,
-        status="pending",
-        mensaje=f"Entrenamiento encolado con {len(texts)} ejemplos",
-    )
-
-
-@router.post("/internal/sync-admin-data")
-def run_sync_admin():
-    stats = sync_admin_data()
-    return stats
-
-
-@router.get("/train/status/{task_id}", response_model=TaskInfo)
-def training_status(task_id: int):
-    task = get_task_status(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada")
-    return TaskInfo(
-        task_id=task_id,
-        status=task["status"],
-        modelo_version=task.get("modelo_version", ""),
-        metricas=task.get("metricas", {}),
-        mensaje=_status_message(task),
-    )
-
-
-def _status_message(task: dict) -> str:
-    s = task["status"]
-    if s == "pending":
-        return "Entrenamiento en progreso..."
-    if s == "completed":
-        return f"Entrenamiento completado: {task.get('modelo_version', '')}"
-    if s == "failed":
-        return f"Entrenamiento fallido: {task.get('error', '')}"
-    return s
-
-
-@router.get("/pending", response_model=PendingList)
+@router.get("/pending", response_model=PendingListResponse)
 def list_pending(
     resuelta: bool = False,
     page: int = Query(1, ge=1),
@@ -89,53 +30,7 @@ def list_pending(
         )
         for r in paged
     ]
-    return PendingList(pendientes=items, total=total)
-
-
-@router.get("/metrics/predictions", response_model=list[PredictionItem])
-def predictions_incorrectas(limit: int = 100, conn=Depends(get_db)):
-    rows = db_queries.get_predicciones(conn, incorrectas=True, limit=limit)
-    return [
-        PredictionItem(
-            id=r[0], texto_usuario=r[1],
-            intencion_predicha=r[2], confianza=float(r[3]),
-            correcta=r[4], creado_en=r[5],
-        )
-        for r in rows
-    ]
-
-
-@router.get("/metrics/model", response_model=ModelMetrics | None)
-def model_metrics(conn=Depends(get_db)):
-    row = db_queries.get_modelo_activo(conn)
-    if not row:
-        return None
-    return ModelMetrics(
-        nombre=row[1], version=row[2],
-        accuracy=float(row[3]), precision=float(row[4]),
-        recall=float(row[5]), f1_score=float(row[6]),
-        activo=row[7],
-    )
-
-
-@router.get("/modelos", response_model=list[ModelMetrics])
-def list_modelos(
-    limit: int = Query(10, ge=1, le=100),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    conn=Depends(get_db),
-):
-    rows = db_queries.get_historial_modelos(conn, limit=limit)
-    paged, total = paginate(rows, page, page_size)
-    return [
-        ModelMetrics(
-            nombre=r[1], version=r[2],
-            accuracy=float(r[3]), precision=float(r[4]),
-            recall=float(r[5]), f1_score=float(r[6]),
-            activo=r[7],
-        )
-        for r in paged
-    ]
+    return PendingListResponse(pendientes=items, total=total)
 
 
 @router.get("/metrics/usage", response_model=UsageMetricsResponse)
@@ -145,9 +40,9 @@ def usage_metrics(conn=Depends(get_db), _auth=Depends(requerir_admin)):
     total_msgs = db_queries.count_mensajes(conn)
     pendientes = db_queries.count_pendientes(conn, resuelta=False)
 
-    top_int = [
-        {"intencion": r[0], "total": r[1]}
-        for r in db_queries.top_intenciones(conn)
+    top_tipos = [
+        {"tipo_resolucion": r[0], "total": r[1]}
+        for r in db_queries.top_tipos_resolucion(conn)
     ]
     resolucion = [
         {"tipo": r[0], "total": r[1]}
@@ -163,7 +58,7 @@ def usage_metrics(conn=Depends(get_db), _auth=Depends(requerir_admin)):
         conversaciones_activas=activas,
         total_mensajes=total_msgs,
         pendientes_sin_resolver=pendientes,
-        top_intenciones=top_int,
+        top_tipos_resolucion=top_tipos,
         resolucion_por_tipo=resolucion,
         feedback_utiles=fb_utiles,
         feedback_no_utiles=fb_no_utiles,
@@ -226,34 +121,6 @@ def _generar_resumen(mensajes) -> str:
     return " | ".join(partes) if partes else "Conversación sin contenido"
 
 
-
-
-
-@router.post("/pending/{id}/convert", response_model=PendingConvertResponse)
-def convert_pending(id: int, req: PendingConvertRequest, conn=Depends(get_db)):
-    pending = db_queries.get_pendiente_by_id(conn, id)
-    if not pending:
-        raise HTTPException(status_code=404, detail="Pendiente no encontrado")
-    if pending[2]:
-        raise HTTPException(status_code=400, detail="El pendiente ya está resuelto")
-
-    item = create_dataset(conn, pending[1], req.id_intencion)
-    ds_id = item["id"]
-
-    if req.validar:
-        from app.controllers.dataset_controller import validate_dataset
-        item = validate_dataset(conn, ds_id)
-
-    db_queries.marcar_pendiente_resuelta(conn, id)
-    logger.info(f"Pendiente {id} convertido a dataset {ds_id}")
-
-    return PendingConvertResponse(
-        id_pendiente=id,
-        id_dataset=ds_id,
-        dataset=DatasetResponse(**item),
-    )
-
-
 @router.patch("/pending/{id}/resolver")
 def resolve_pending(id: int, conn=Depends(get_db)):
     pending = db_queries.get_pendiente_by_id(conn, id)
@@ -262,5 +129,5 @@ def resolve_pending(id: int, conn=Depends(get_db)):
     if pending[2]:
         raise HTTPException(status_code=400, detail="El pendiente ya está resuelto")
     db_queries.resolver_pendiente(conn, id)
-    logger.info(f"Pendiente {id} resuelto sin convertir")
+    logger.info(f"Pendiente {id} resuelto")
     return {"mensaje": "Pendiente resuelto", "id": id}

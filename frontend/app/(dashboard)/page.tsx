@@ -1,9 +1,11 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Box, Grid, Typography, useTheme, Card, CardContent, Stack, Chip, Avatar } from '@mui/material'
 import {
   School, Book, Group, Person,
-  CalendarMonth, TrendingUp, Chat, Help,
+  CalendarMonth, TrendingUp, Chat, Help, Assignment,
+  CheckCircle, PendingActions, AutoStories, Grade,
 } from '@mui/icons-material'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useStudent } from '@/hooks/useStudent'
@@ -13,18 +15,31 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { useAuth } from '@/hooks/useAuth'
 import { ROLES } from '@/config/permissions'
+import { tutoriasService } from '@/services/api/tutorias.service'
+import { useRouter } from 'next/navigation'
+import { ROUTES } from '@/config/routes'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, docenteId } = useAuth()
   const { data: stats, isLoading, isError, refetch } = useDashboard()
-  const { estudiante, carrera, tutoriasCount } = useStudent()
+  const { estudiante, carrera, materias, tutoriasCount } = useStudent()
+  const [tutoriasDocente, setTutoriasDocente] = useState<number>(0)
   const theme = useTheme()
+  const router = useRouter()
 
   const isAdmin = user?.roles?.includes(ROLES.ADMIN)
   const isManager = user?.roles?.includes(ROLES.MANAGER)
   const isStudent = user?.roles?.includes(ROLES.ESTUDIANTE)
   const isTeacher = user?.roles?.includes(ROLES.PROFESOR)
   const canViewFullStats = isAdmin || isManager
+
+  useEffect(() => {
+    if (isTeacher && docenteId) {
+      tutoriasService.listarTutoriasPorDocente(docenteId).then((r) => {
+        setTutoriasDocente(r.cantidad ?? 0)
+      }).catch(() => {})
+    }
+  }, [isTeacher, docenteId])
 
   if (isError) {
     return (
@@ -45,10 +60,7 @@ export default function DashboardPage() {
     { title: 'Facultades', key: 'total_facultades', icon: Group, color: theme.palette.warning.main },
     { title: 'Asignaturas', key: 'total_asignaturas', icon: TrendingUp, color: theme.palette.info.main },
     { title: 'Períodos Activos', key: 'periodos_activos', icon: CalendarMonth, color: theme.palette.error.main },
-  ] as const : [
-    { title: 'Mis Tutorías', key: 'tutorias', icon: School, color: theme.palette.primary.main },
-    { title: 'Chat', key: 'chat', icon: Chat, color: theme.palette.success.main },
-  ] as const
+  ] as const : []
 
   return (
     <Box>
@@ -64,24 +76,42 @@ export default function DashboardPage() {
         </Box>
       </Box>
 
+      {/* ── ESTUDIANTE ── */}
       {isStudent && estudiante && (
-        <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
-          <CardContent>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'center' }}>
-              <Avatar sx={{ width: 64, height: 64, bgcolor: 'primary.main', fontSize: '1.5rem' }}>
-                {estudiante.nombres?.[0]?.toUpperCase() || 'E'}
-              </Avatar>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>{estudiante.nombres} {estudiante.apellidos}</Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-                  <Chip label={`Matrícula: ${estudiante.matricula || 'N/A'}`} size="small" variant="outlined" />
-                  <Chip label={`Carrera: ${carrera?.nombre || 'N/A'}`} size="small" color="primary" variant="outlined" />
-                  <Chip label={`Tutorías: ${tutoriasCount}`} size="small" color="info" variant="outlined" />
-                </Stack>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
+        <>
+          <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
+            <CardContent>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'center' }}>
+                <Avatar sx={{ width: 72, height: 72, bgcolor: 'primary.main', fontSize: '1.8rem' }}>
+                  {estudiante.nombres?.[0]?.toUpperCase() || 'E'}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>{estudiante.nombres} {estudiante.apellidos}</Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+                    <Chip label={`Matrícula: ${estudiante.matricula || 'N/A'}`} size="small" variant="outlined" />
+                    <Chip label={`Carrera: ${carrera?.nombre || 'N/A'}`} size="small" color="primary" variant="outlined" />
+                    <Chip label={`Nivel: ${estudiante.nivel || 'N/A'}`} size="small" color="info" variant="outlined" />
+                  </Stack>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Materias Inscritas" value={materias.length} icon={AutoStories} color={theme.palette.info.main} onClick={() => router.push(ROUTES.ACADEMICO_MATERIAS)} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Tutorías" value={tutoriasCount} icon={Assignment} color={theme.palette.primary.main} onClick={() => router.push(ROUTES.TUTORIAS)} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Chat IA" value="Activo" icon={Chat} color={theme.palette.success.main} onClick={() => router.push(ROUTES.CHAT)} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Bitácora" value="Ver registros" icon={Book} color={theme.palette.warning.main} onClick={() => router.push(ROUTES.ACADEMICO_BITACORA)} />
+            </Grid>
+          </Grid>
+        </>
       )}
 
       {isStudent && !estudiante && (
@@ -100,95 +130,106 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* ── PROFESOR ── */}
       {isTeacher && (
-        <Card variant="outlined" sx={{ mb: 3, borderRadius: 3, bgcolor: 'secondary.main', color: 'white' }}>
-          <CardContent sx={{ py: 3 }}>
-            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              <School sx={{ fontSize: 40, opacity: 0.8 }} />
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>Panel de Docente</Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Revisa las tutorías asignadas en la sección de Tutorías.
-                </Typography>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
+        <>
+          <Card variant="outlined" sx={{ mb: 3, borderRadius: 3, bgcolor: 'secondary.main', color: 'white' }}>
+            <CardContent sx={{ py: 3 }}>
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                <School sx={{ fontSize: 40, opacity: 0.8 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Panel de Docente</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    {docenteId
+                      ? `Bienvenido, ${user?.nombre || 'Docente'}. Tienes ${tutoriasDocente} tutorías asignadas.`
+                      : 'Revisa las tutorías asignadas en la sección de Tutorías.'}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {docenteId && (
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <StatCard title="Tutorías Asignadas" value={tutoriasDocente} icon={Assignment} color={theme.palette.primary.main} onClick={() => router.push(ROUTES.TUTORIAS)} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <StatCard title="Chat IA" value="Activo" icon={Chat} color={theme.palette.success.main} onClick={() => router.push(ROUTES.CHAT)} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <StatCard title="Bitácora" value="Ver registros" icon={Book} color={theme.palette.warning.main} />
+              </Grid>
+            </Grid>
+          )}
+        </>
       )}
 
+      {/* ── LOADING / ADMIN ── */}
       {isLoading ? (
         <LoadingSkeleton type="card" count={canViewFullStats ? 6 : 2} />
       ) : canViewFullStats && stats ? (
-        <Grid container spacing={3}>
-          {statsConfig.map((stat) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={stat.key}>
-              <StatCard
-                title={stat.title}
-                value={(stats as unknown as Record<string, number>)[stat.key] ?? '—'}
-                icon={stat.icon}
-                color={stat.color}
-              />
-            </Grid>
-          ))}
-        </Grid>
-      ) : isStudent ? (
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <StatCard title="Mis Tutorías" value={tutoriasCount} icon={School} color={theme.palette.primary.main} />
+        <>
+          <Grid container spacing={3}>
+            {statsConfig.map((stat) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={stat.key}>
+                <StatCard
+                  title={stat.title}
+                  value={(stats as unknown as Record<string, number>)[stat.key] ?? '—'}
+                  icon={stat.icon}
+                  color={stat.color}
+                />
+              </Grid>
+            ))}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <StatCard title="Chat IA" value="Activo" icon={Chat} color={theme.palette.success.main} />
-          </Grid>
-        </Grid>
-      ) : null}
 
-      {canViewFullStats && stats && (
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <ChartCard title="Distribución Académica" subtitle="Estudiantes vs Docentes por período">
-              <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                {[
-                  { label: 'Estudiantes', value: stats.total_estudiantes, color: theme.palette.primary.main, max: Math.max(stats.total_estudiantes, stats.total_docentes) },
-                  { label: 'Docentes', value: stats.total_docentes, color: theme.palette.success.main, max: Math.max(stats.total_estudiantes, stats.total_docentes) },
-                  { label: 'Carreras', value: stats.total_carreras, color: theme.palette.secondary.main, max: Math.max(stats.total_carreras, 1) },
-                ].map((item) => (
-                  <Box key={item.label} sx={{ textAlign: 'center' }}>
-                    <Box sx={{ width: 64, height: Math.max(40, (item.value / item.max) * 160), bgcolor: item.color, borderRadius: 2, opacity: 0.85, transition: 'height 300ms ease', mx: 'auto', minHeight: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                      <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, pb: 0.5 }}>{item.value}</Typography>
-                    </Box>
-                    <Typography variant="caption" sx={{ mt: 1, display: 'block', fontWeight: 500 }}>{item.label}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </ChartCard>
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <ChartCard title="Vista General" subtitle="Resumen del sistema">
-              <Box sx={{ width: '100%' }}>
-                {[
-                  { label: 'Facultades', value: stats.total_facultades, max: Math.max(stats.total_facultades, 1) },
-                  { label: 'Carreras', value: stats.total_carreras, max: Math.max(stats.total_carreras, 1) },
-                  { label: 'Asignaturas', value: stats.total_asignaturas, max: Math.max(stats.total_asignaturas, 1) },
-                  { label: 'Docentes', value: stats.total_docentes, max: Math.max(stats.total_docentes, 1) },
-                  { label: 'Estudiantes', value: stats.total_estudiantes, max: Math.max(stats.total_estudiantes, 1) },
-                  { label: 'Períodos', value: stats.periodos_activos, max: Math.max(stats.periodos_activos, 1) },
-                ].map((item) => {
-                  const pct = Math.max(8, (item.value / item.max) * 100)
-                  return (
-                    <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
-                      <Typography variant="caption" sx={{ minWidth: 100, fontWeight: 500, color: 'text.secondary' }}>{item.label}</Typography>
-                      <Box sx={{ flex: 1, bgcolor: 'grey.100', borderRadius: 2, height: 10, overflow: 'hidden' }}>
-                        <Box sx={{ width: `${pct}%`, bgcolor: 'primary.main', height: '100%', borderRadius: 2, transition: 'width 500ms ease' }} />
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <ChartCard title="Distribución Académica" subtitle="Estudiantes vs Docentes">
+                <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  {[
+                    { label: 'Estudiantes', value: stats.total_estudiantes, color: theme.palette.primary.main, max: Math.max(stats.total_estudiantes, stats.total_docentes || 1) },
+                    { label: 'Docentes', value: stats.total_docentes, color: theme.palette.success.main, max: Math.max(stats.total_estudiantes, stats.total_docentes || 1) },
+                    { label: 'Carreras', value: stats.total_carreras, color: theme.palette.secondary.main, max: Math.max(stats.total_carreras, 1) },
+                  ].map((item) => (
+                    <Box key={item.label} sx={{ textAlign: 'center' }}>
+                      <Box sx={{ width: 64, height: Math.max(40, (item.value / item.max) * 160), bgcolor: item.color, borderRadius: 2, opacity: 0.85, mx: 'auto', minHeight: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                        <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, pb: 0.5 }}>{item.value}</Typography>
                       </Box>
-                      <Typography variant="caption" sx={{ minWidth: 30, fontWeight: 600, textAlign: 'right' }}>{item.value}</Typography>
+                      <Typography variant="caption" sx={{ mt: 1, display: 'block', fontWeight: 500 }}>{item.label}</Typography>
                     </Box>
-                  )
-                })}
-              </Box>
-            </ChartCard>
+                  ))}
+                </Box>
+              </ChartCard>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <ChartCard title="Vista General" subtitle="Resumen del sistema">
+                <Box sx={{ width: '100%' }}>
+                  {[
+                    { label: 'Facultades', value: stats.total_facultades, max: Math.max(stats.total_facultades, 1) },
+                    { label: 'Carreras', value: stats.total_carreras, max: Math.max(stats.total_carreras, 1) },
+                    { label: 'Asignaturas', value: stats.total_asignaturas, max: Math.max(stats.total_asignaturas, 1) },
+                    { label: 'Docentes', value: stats.total_docentes, max: Math.max(stats.total_docentes, 1) },
+                    { label: 'Estudiantes', value: stats.total_estudiantes, max: Math.max(stats.total_estudiantes, 1) },
+                    { label: 'Períodos', value: stats.periodos_activos, max: Math.max(stats.periodos_activos, 1) },
+                  ].map((item) => {
+                    const pct = Math.max(8, (item.value / item.max) * 100)
+                    return (
+                      <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
+                        <Typography variant="caption" sx={{ minWidth: 100, fontWeight: 500, color: 'text.secondary' }}>{item.label}</Typography>
+                        <Box sx={{ flex: 1, bgcolor: 'grey.100', borderRadius: 2, height: 10, overflow: 'hidden' }}>
+                          <Box sx={{ width: `${pct}%`, bgcolor: 'primary.main', height: '100%', borderRadius: 2, transition: 'width 500ms ease' }} />
+                        </Box>
+                        <Typography variant="caption" sx={{ minWidth: 30, fontWeight: 600, textAlign: 'right' }}>{item.value}</Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </ChartCard>
+            </Grid>
           </Grid>
-        </Grid>
-      )}
+        </>
+      ) : null}
     </Box>
   )
 }

@@ -21,6 +21,7 @@ export interface ChatRequest {
   usuario_id: number
   mensaje: string
   id_conversacion?: number
+  nueva_conversacion?: boolean
   nombre?: string
   estudiante_id?: number
 }

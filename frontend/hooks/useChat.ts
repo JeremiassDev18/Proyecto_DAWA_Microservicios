@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { chatService } from '@/services/api/chat.service'
 import { useAuth } from './useAuth'
 import { useToast } from './useToast'
@@ -14,6 +14,7 @@ export const useChat = () => {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
+  const [pendingNew, setPendingNew] = useState(false)
 
   const userId = user?.id
 
@@ -26,6 +27,16 @@ export const useChat = () => {
     queryFn: () => chatService.getConversations(userId!),
     enabled: !!userId,
   })
+
+  const loadMessages = useCallback(async (conversationId: number) => {
+    try {
+      const msgs = await chatService.getConversationMessages(conversationId)
+      setMessages(msgs)
+    } catch {
+      showToast('No se pudieron cargar los mensajes', 'error')
+      setMessages([])
+    }
+  }, [showToast])
 
   const sendMessage = useCallback(async (text: string) => {
     if (!userId) return
@@ -49,8 +60,11 @@ export const useChat = () => {
         mensaje: text,
         id_conversacion: currentConversationId || undefined,
         nombre: user?.nombre || 'Usuario',
+        nueva_conversacion: pendingNew,
         estudiante_id: estudianteId || undefined,
       })
+
+      setPendingNew(false)
 
       const newConvId = response.id_conversacion
       if (!currentConversationId) {
@@ -80,12 +94,12 @@ export const useChat = () => {
     } finally {
       setIsSending(false)
     }
-  }, [userId, currentConversationId, user?.nombre, queryClient, showToast])
+  }, [userId, currentConversationId, user?.nombre, queryClient, showToast, estudianteId, pendingNew])
 
   const selectConversation = useCallback((id: number) => {
     setCurrentConversationId(id)
-    setMessages([])
-  }, [])
+    loadMessages(id)
+  }, [loadMessages])
 
   const sendFeedback = useCallback(async (messageId: number, util: boolean) => {
     try {
@@ -99,6 +113,7 @@ export const useChat = () => {
   const newConversation = useCallback(() => {
     setCurrentConversationId(null)
     setMessages([])
+    setPendingNew(true)
   }, [])
 
   return {

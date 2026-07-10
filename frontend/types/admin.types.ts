@@ -8,8 +8,6 @@ export interface DashboardStats {
   periodos_activos: number
   tutorias_activas?: number
   tutorias_pendientes?: number
-  modelo_version?: string
-  dataset_size?: number
 }
 
 export interface Facultad {
@@ -59,6 +57,7 @@ export interface Estudiante {
   matricula: string
   carrera_id: number
   periodo_id: number
+  nivel?: string
   activo?: boolean
 }
 
@@ -72,50 +71,6 @@ export interface Permission {
   id: number
   nombre: string
   descripcion?: string
-}
-
-export interface DatasetEntry {
-  id: number
-  texto_pregunta: string
-  intencion: string
-  respuesta: string
-  activo: boolean
-  validado: boolean
-  creado_en?: string
-}
-
-export interface TrainingStatus {
-  task_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  progress?: number
-  message?: string
-}
-
-export interface PendingQuery {
-  id: number
-  pregunta: string
-  respuesta_dada?: string
-  confianza?: number
-  intencion_detectada?: string
-  resuelta: boolean
-  creado_en?: string
-}
-
-export interface Document {
-  id: number
-  nombre: string
-  categoria: string
-  contenido?: string
-  activo: boolean
-  creado_en?: string
-}
-
-export interface ModelInfo {
-  id: number
-  version: string
-  accuracy?: number
-  activo: boolean
-  creado_en?: string
 }
 
 export interface AuditLog {

@@ -142,18 +142,34 @@ class TutoriasRestClient:
             "Content-Type": "application/json",
         }
 
+    def _log_failure(self, method: str, url: str, status_code: int | None, error: str | None):
+        logger.warning(
+            f"TutoriasRestClient.{method} falló: "
+            f"url={url} status={status_code} error={error}"
+        )
+
     def consultar_mis_bitacoras(self, estudiante_id: int) -> list[dict]:
+        url = f"{self._base}/api/tutorias/estudiantes/{estudiante_id}/bitacoras"
         try:
-            resp = httpx.get(
-                f"{self._base}/api/tutorias/estudiantes/{estudiante_id}/bitacoras",
-                headers=self._headers,
-                timeout=10,
-            )
+            resp = httpx.get(url, headers=self._headers, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("bitacoras", [])
+            self._log_failure("consultar_mis_bitacoras", url, resp.status_code, None)
         except Exception as e:
-            logger.warning(f"TutoriasRestClient.consultar_mis_bitacoras({estudiante_id}) falló: {e}")
+            self._log_failure("consultar_mis_bitacoras", url, None, str(e))
+        return []
+
+    def consultar_bitacoras_por_solicitud(self, solicitud_id: int) -> list[dict]:
+        url = f"{self._base}/api/tutorias/bitacoras/{solicitud_id}"
+        try:
+            resp = httpx.get(url, headers=self._headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("bitacoras", [])
+            self._log_failure("consultar_bitacoras_por_solicitud", url, resp.status_code, None)
+        except Exception as e:
+            self._log_failure("consultar_bitacoras_por_solicitud", url, None, str(e))
         return []
 
 

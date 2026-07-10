@@ -111,6 +111,22 @@ services:
     networks:
       - tutorias-network
 
+  # ── Ollama (motor LLM para el agente) ──
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - chatbot-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
   # ── Chatbot ──
   chatbot-db:
     image: pgvector/pgvector:pg16
@@ -138,6 +154,7 @@ services:
     restart: unless-stopped
     depends_on:
       - chatbot-db
+      - ollama
     ports:
       - "5004:5004"
     environment:
@@ -157,16 +174,52 @@ services:
       RABBITMQ_QUEUE_EVENTOS: tutorias.eventos
       RABBITMQ_RESPONSE_TIMEOUT: 30
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change_me_in_production}
-      SIMILARITY_THRESHOLD: "0.25"
-      VECTOR_WEIGHT: "0.70"
-      TRGM_WEIGHT: "0.30"
+      AI_ENGINE: ${AI_ENGINE:-qwen}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
+      OLLAMA_MAX_TOOL_ITERATIONS: ${OLLAMA_MAX_TOOL_ITERATIONS:-3}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_CANDIDATES: ${RAG_CANDIDATES:-20}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
+      RAG_VECTOR_WEIGHT: ${RAG_VECTOR_WEIGHT:-0.80}
+      RAG_TEXT_WEIGHT: ${RAG_TEXT_WEIGHT:-0.20}
       MODEL_NAME: all-MiniLM-L6-v2
-    volumes:
-      - ./data:/app/data
     networks:
       chatbot-network:
         aliases:
           - chatbot-service
+
+  chatbot-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker.summary_worker"]
+    depends_on:
+      - chatbot-db
+      - rabbitmq
+      - tutorias-service
+    environment:
+      DB_HOST: chatbot-db
+      DB_PORT: 5432
+      DB_NAME: chatbotdb
+      DB_USER: admin
+      DB_PASSWORD: ${DB_PASSWORD:-admin123}
+      TUTORIAS_SERVICE_URL: http://tutorias-service:5003
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      RABBITMQ_QUEUE_EVENTOS: tutorias.eventos
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change_me_in_production}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
+    networks:
+      - chatbot-network
+      - tutorias-network
 
   # ── API Gateway ──
   gateway:
@@ -273,6 +326,7 @@ volumes:
   postgres_tutorias_data:
   chatbot-db-data:
   security-db-data:
+  ollama_data:
 
 networks:
   administration-network:

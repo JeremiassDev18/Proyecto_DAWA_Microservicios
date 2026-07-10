@@ -10,20 +10,26 @@ def obtener_dashboard():
     db = SessionLocal()
 
     try:
+        facultades = db.query(Facultad).filter(Facultad.estado == True).count()
+        carreras = db.query(Carrera).filter(Carrera.estado == True).count()
+        asignaturas = db.query(Asignatura).filter(Asignatura.estado == True).count()
+        docentes = db.query(Docente).filter(Docente.estado == True).count()
+        estudiantes = db.query(Estudiante).filter(
+            Estudiante.estado == True,
+            Estudiante.estado_academico == "activo"
+        ).count()
+        periodos = db.query(PeriodoAcademico).filter(
+            PeriodoAcademico.estado == True,
+            PeriodoAcademico.estado_periodo == "activo"
+        ).count()
+
         return jsonify({
-            "facultades_activas": db.query(Facultad).filter(Facultad.estado == True).count(),
-            "carreras_activas": db.query(Carrera).filter(Carrera.estado == True).count(),
-            "asignaturas_activas": db.query(Asignatura).filter(Asignatura.estado == True).count(),
-            "docentes_activos": db.query(Docente).filter(Docente.estado == True).count(),
-            "estudiantes_activos": db.query(Estudiante).filter(
-                Estudiante.estado == True,
-                Estudiante.estado_academico == "activo"
-            ).count(),
-            "paralelos_activos": db.query(Paralelo).filter(Paralelo.estado == True).count(),
-            "periodos_activos": db.query(PeriodoAcademico).filter(
-                PeriodoAcademico.estado == True,
-                PeriodoAcademico.estado_periodo == "activo"
-            ).count()
+            "total_facultades": facultades,
+            "total_carreras": carreras,
+            "total_asignaturas": asignaturas,
+            "total_docentes": docentes,
+            "total_estudiantes": estudiantes,
+            "periodos_activos": periodos,
         }), 200
 
     finally:

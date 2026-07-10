@@ -2,7 +2,7 @@
 
 import { Box, Grid, Typography, useTheme } from '@mui/material'
 import { Chat, Message, TrendingUp, Warning } from '@mui/icons-material'
-import { useUsageMetrics } from '@/hooks/useTraining'
+import { useUsageMetrics } from '@/hooks/useKnowledge'
 import { StatCard } from '@/components/ui/StatCard'
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton'
 import { ErrorState } from '@/components/ui/ErrorState'

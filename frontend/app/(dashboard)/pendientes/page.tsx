@@ -1,13 +1,13 @@
 'use client'
 
 import { Box, Button, Card, CardContent, Stack, Typography, Chip } from '@mui/material'
-import { CheckCircle, SwapHoriz, Help } from '@mui/icons-material'
-import { usePending } from '@/hooks/useTraining'
+import { CheckCircle, Help } from '@mui/icons-material'
+import { usePending } from '@/hooks/useKnowledge'
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 
 export default function PendientesPage() {
-  const { pending, isLoading, isError, refetch, convertToDataset, isConverting, resolve, isResolving } = usePending()
+  const { pending, isLoading, isError, refetch, resolve, isResolving } = usePending()
 
   if (isError) {
     return <ErrorState title="Error al cargar pendientes" message="No se pudieron cargar las consultas pendientes." onRetry={() => refetch()} />
@@ -48,14 +48,9 @@ export default function PendientesPage() {
                       <Chip label={`Confianza: ${(item.confianza * 100).toFixed(0)}%`} size="small" color={item.confianza > 0.5 ? 'warning' : 'error'} />
                     )}
                   </Box>
-                  <Stack direction="row" spacing={1}>
-                    <Button size="small" variant="outlined" startIcon={<SwapHoriz />} onClick={() => convertToDataset(item.id)} disabled={isConverting}>
-                      Convertir
-                    </Button>
-                    <Button size="small" variant="contained" startIcon={<CheckCircle />} onClick={() => resolve(item.id)} disabled={isResolving}>
-                      Resolver
-                    </Button>
-                  </Stack>
+                  <Button size="small" variant="contained" startIcon={<CheckCircle />} onClick={() => resolve(item.id)} disabled={isResolving}>
+                    Resolver
+                  </Button>
                 </Stack>
               </CardContent>
             </Card>

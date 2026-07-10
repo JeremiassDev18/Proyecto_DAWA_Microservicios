@@ -98,6 +98,7 @@ class Estudiante(Base):
     matricula = Column(String(30), unique=True)
     carrera_id = Column(Integer, ForeignKey("carreras.id"), nullable=False)
     periodo_id = Column(Integer, ForeignKey("periodos_academicos.id"), nullable=False)
+    nivel = Column(String(30), default="Primero")
     estado_academico = Column(String(30), default="activo")
     estado = Column(Boolean, default=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)

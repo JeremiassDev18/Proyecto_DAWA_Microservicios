@@ -46,6 +46,10 @@ export const adminService = {
     const data = await api.admin.get<any>('/docentes/')
     return data.docentes || data
   },
+  getDocenteByEmail: async (email: string): Promise<Docente | null> => {
+    const docentes = await adminService.getDocentes()
+    return docentes.find((d: any) => (d.correo || d.email) === email) || null
+  },
   getDocente: async (id: number): Promise<Docente> => {
     return api.admin.get<Docente>(`/docentes/${id}`)
   },

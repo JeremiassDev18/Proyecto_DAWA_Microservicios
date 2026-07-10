@@ -31,85 +31,26 @@ class PendingItem(BaseModel):
     creado_en: datetime
 
 
-class PendingList(BaseModel):
+class PendingListResponse(BaseModel):
     pendientes: list[PendingItem]
     total: int
-
-
-class ModelMetrics(BaseModel):
-    nombre: str
-    version: str
-    accuracy: float
-    precision: float
-    recall: float
-    f1_score: float
-    activo: bool
-
-
-class PredictionItem(BaseModel):
-    id: int
-    texto_usuario: str
-    intencion_predicha: str
-    confianza: float
-    correcta: bool | None
-    creado_en: datetime
-
-
-class TrainingStatus(BaseModel):
-    mensaje: str
-    modelo_version: str
-    metricas: dict
 
 
 class HealthResponse(BaseModel):
     status: str
 
 
-class DatasetResponse(BaseModel):
-    id: int
-    texto: str
-    id_intencion: int
-    intencion: str
-    validado: bool
-    origen: str
-    activo: bool
-    creado_en: datetime
-    actualizado_en: datetime
-
-
-class DatasetListResponse(BaseModel):
-    items: list[DatasetResponse]
-    total: int
-
-
-class PendingConvertResponse(BaseModel):
-    id_pendiente: int
-    id_dataset: int
-    dataset: DatasetResponse
-
-
-class TaskInfo(BaseModel):
-    task_id: int
-    status: str
-    modelo_version: str = ""
-    metricas: dict = {}
-    mensaje: str = ""
-
-
-class DocumentResponse(BaseModel):
+class KnowledgeResponse(BaseModel):
     id: int
     titulo: str
     contenido: str
-    categoria: str | None
-    fuente: str | None
-    archivo_pdf: str | None
+    tags: list[str]
     activo: bool
-    creado_en: datetime
-    actualizado_en: datetime
+    fecha_actualizacion: datetime
 
 
-class DocumentListResponse(BaseModel):
-    items: list[DocumentResponse]
+class KnowledgeListResponse(BaseModel):
+    items: list[KnowledgeResponse]
     total: int
 
 
@@ -118,40 +59,11 @@ class UsageMetricsResponse(BaseModel):
     conversaciones_activas: int
     total_mensajes: int
     pendientes_sin_resolver: int
-    top_intenciones: list[dict]
+    top_tipos_resolucion: list[dict]
     resolucion_por_tipo: list[dict]
     feedback_utiles: int
     feedback_no_utiles: int
     feedback_total: int
-
-
-class IntentResponse(BaseModel):
-    id: int
-    nombre: str
-    descripcion: str | None
-    activo: bool
-    creado_en: datetime
-
-
-class IntentListResponse(BaseModel):
-    items: list[IntentResponse]
-    total: int
-
-
-class ResponseResponse(BaseModel):
-    id: int
-    id_intencion: int
-    intencion: str
-    respuesta_texto: str
-    tipo: str
-    prioridad: int
-    activa: bool
-    veces_usada: int
-
-
-class ResponseListResponse(BaseModel):
-    items: list[ResponseResponse]
-    total: int
 
 
 class ConversationSummary(BaseModel):
@@ -162,3 +74,23 @@ class ConversationSummary(BaseModel):
     activa: bool
     total_mensajes: int
     resumen: str
+
+
+class MessageResponse(BaseModel):
+    id: int
+    id_conversacion: int
+    rol: str
+    contenido: str
+    tipo_resolucion: str | None = None
+    confianza_ml: float | None = None
+    modelo_usado: str | None = None
+    enviado_en: datetime
+
+
+class ConversationResponse(BaseModel):
+    id: int
+    id_usuario: int
+    nombre_cliente: str | None = None
+    activa: bool
+    iniciado_en: datetime
+    finalizado_en: datetime | None = None

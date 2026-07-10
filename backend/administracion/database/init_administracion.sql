@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 CREATE TABLE IF NOT EXISTS facultades (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
@@ -72,6 +74,7 @@ CREATE TABLE IF NOT EXISTS estudiantes (
     matricula VARCHAR(30) UNIQUE,
     carrera_id INTEGER NOT NULL,
     periodo_id INTEGER NOT NULL,
+    nivel VARCHAR(30) DEFAULT 'Primero',
     estado_academico VARCHAR(30) DEFAULT 'activo',
     estado BOOLEAN DEFAULT TRUE,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

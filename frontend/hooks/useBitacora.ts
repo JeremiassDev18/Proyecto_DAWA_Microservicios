@@ -7,7 +7,7 @@ import { useAuth } from './useAuth'
 export function useBitacora() {
   const { estudianteId } = useAuth()
 
-  return useQuery({
+  const result = useQuery({
     queryKey: ['bitacora', estudianteId],
     queryFn: async () => {
       const data = await tutoriasService.listarBitacorasEstudiante(estudianteId!)
@@ -16,4 +16,10 @@ export function useBitacora() {
     enabled: !!estudianteId,
     staleTime: 30 * 1000,
   })
+
+  return {
+    ...result,
+    data: result.data ?? [],
+    isError: !!estudianteId ? result.isError : false,
+  }
 }

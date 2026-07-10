@@ -2,8 +2,9 @@ import { api } from '@/services/api'
 import type { SolicitudTutoria, Notificacion } from '@/types/tutorias.types'
 
 export const tutoriasService = {
-  listarSolicitudes: async (estudianteId: number, periodoId?: number): Promise<SolicitudTutoria[]> => {
-    const params: any = { estudiante_id: estudianteId }
+  listarSolicitudes: async (estudianteId?: number, periodoId?: number): Promise<SolicitudTutoria[]> => {
+    const params: Record<string, any> = {}
+    if (estudianteId != null) params.estudiante_id = estudianteId
     if (periodoId) params.periodo_id = periodoId
     const data = await api.tutorias.get<any>('/solicitudes', { params })
     return data.solicitudes || data
@@ -37,5 +38,10 @@ export const tutoriasService = {
       params: { destinatario_id: destinatarioId, solo_no_leidas: soloNoLeidas },
     })
     return data.notificaciones || data
+  },
+  listarTutoriasPorDocente: async (docenteId: number, periodoId?: number): Promise<{ cantidad: number; tutorias: any[] }> => {
+    const params: any = { docente_id: docenteId }
+    if (periodoId) params.periodo_id = periodoId
+    return api.tutorias.get<any>('/reportes/por-docente', { params })
   },
 }

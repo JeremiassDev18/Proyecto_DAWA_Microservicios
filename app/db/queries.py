@@ -1,328 +1,21 @@
+"""
+Queries de PostgreSQL para el chatbot-service.
+
+Este módulo contiene únicamente las funciones activas usadas por:
+- Gestión de conversaciones y mensajes
+- Feedback de usuarios
+- Preguntas pendientes
+- Centro de conocimiento (RAG)
+- Métricas de uso
+- Memoria del agente LLM
+
+Código obsoleto de SetFit (dataset, intenciones, respuestas, modelos,
+entrenamientos, predicciones) fue eliminado en la migración al agente LLM.
+"""
+
+import json
 from datetime import datetime
 from typing import Any, Optional
-
-
-# ── chatbot_dataset ── query helpers ───────────────────────────────────
-
-def get_dataset_by_id(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion, "
-            "cd.validado, cd.origen, cd.activo, cd.creado_en, cd.actualizado_en "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE cd.id = %s",
-            (id,),
-        )
-        return cur.fetchone()
-
-
-def update_dataset(conn, id: int, texto: str, id_intencion: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_dataset SET texto = %s, id_intencion = %s, "
-            "actualizado_en = NOW() WHERE id = %s",
-            (texto, id_intencion, id),
-        )
-        conn.commit()
-
-
-def soft_delete_dataset(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_dataset SET activo = FALSE, actualizado_en = NOW() "
-            "WHERE id = %s",
-            (id,),
-        )
-        conn.commit()
-
-
-def validate_dataset(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_dataset SET validado = TRUE, actualizado_en = NOW() "
-            "WHERE id = %s",
-            (id,),
-        )
-        conn.commit()
-
-
-def query_dataset(conn, texto_query: str = "", intencion: str = "",
-                  activo: Optional[bool] = None):
-    with conn.cursor() as cur:
-        sql = (
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion, "
-            "cd.validado, cd.origen, cd.activo, cd.creado_en, cd.actualizado_en "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE 1=1"
-        )
-        params = []
-        if texto_query:
-            sql += " AND cd.texto ILIKE %s"
-            params.append(f"%{texto_query}%")
-        if intencion:
-            sql += " AND ci.nombre = %s"
-            params.append(intencion)
-        if activo is not None:
-            sql += " AND cd.activo = %s"
-            params.append(activo)
-        sql += " ORDER BY cd.id"
-        cur.execute(sql, params)
-        return cur.fetchall()
-
-
-# ── chatbot_intencion ──────────────────────────────────────────────────
-
-def get_all_intenciones(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, nombre, descripcion, activo, creado_en "
-            "FROM chatbot_intencion ORDER BY nombre"
-        )
-        return cur.fetchall()
-
-
-def get_intencion_by_id(conn, id_intencion: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, nombre, descripcion, activo, creado_en "
-            "FROM chatbot_intencion WHERE id = %s",
-            (id_intencion,),
-        )
-        return cur.fetchone()
-
-
-def get_intencion_by_nombre(conn, nombre: str):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, nombre, descripcion, activo, creado_en "
-            "FROM chatbot_intencion WHERE nombre = %s",
-            (nombre,),
-        )
-        return cur.fetchone()
-
-
-def create_intencion(conn, nombre: str, descripcion: str = "") -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO chatbot_intencion (nombre, descripcion) "
-            "VALUES (%s, %s) RETURNING id",
-            (nombre, descripcion),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def get_or_create_intencion(conn, nombre: str, descripcion: str = "") -> int:
-    row = get_intencion_by_nombre(conn, nombre)
-    if row:
-        return row[0]
-    try:
-        return create_intencion(conn, nombre, descripcion)
-    except Exception:
-        row = get_intencion_by_nombre(conn, nombre)
-        if row:
-            return row[0]
-        raise
-
-
-def update_intencion(conn, id: int, nombre: str, descripcion: str = "",
-                     activo: Optional[bool] = None):
-    with conn.cursor() as cur:
-        sql = "UPDATE chatbot_intencion SET nombre = %s, descripcion = %s"
-        params: list = [nombre, descripcion]
-        if activo is not None:
-            sql += ", activo = %s"
-            params.append(activo)
-        sql += " WHERE id = %s"
-        params.append(id)
-        cur.execute(sql, params)
-        conn.commit()
-
-
-def soft_delete_intencion(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_intencion SET activo = FALSE WHERE id = %s",
-            (id,),
-        )
-        conn.commit()
-
-
-# ── chatbot_dataset ────────────────────────────────────────────────────
-
-def get_all_dataset(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion, "
-            "cd.validado, cd.origen, cd.activo "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "ORDER BY cd.id"
-        )
-        return cur.fetchall()
-
-
-def get_activos_validados(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE cd.activo = TRUE AND cd.validado = TRUE"
-        )
-        return cur.fetchall()
-
-
-def search_hybrid(conn, embedding, query_text: str, limit: int = 5,
-                  vector_weight: float = 0.7, trgm_weight: float = 0.3,
-                  threshold: float = 0.25):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion, "
-            "(%s * (1 - (cd.embedding <=> %s::vector)) "
-            "+ %s * similarity(cd.texto, %s)) as score "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE cd.activo = TRUE AND cd.validado = TRUE "
-            "AND (%s * (1 - (cd.embedding <=> %s::vector)) "
-            "+ %s * similarity(cd.texto, %s)) >= %s "
-            "ORDER BY score DESC LIMIT %s",
-            (vector_weight, embedding, trgm_weight, query_text,
-             vector_weight, embedding, trgm_weight, query_text,
-             threshold, limit),
-        )
-        return cur.fetchall()
-
-
-def search_by_embedding(conn, embedding, limit: int = 5, threshold: float = 0.25):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT cd.id, cd.texto, cd.id_intencion, ci.nombre as intencion, "
-            "1 - (cd.embedding <=> %s::vector) as similarity "
-            "FROM chatbot_dataset cd "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE cd.activo = TRUE AND cd.validado = TRUE "
-            "AND 1 - (cd.embedding <=> %s::vector) >= %s "
-            "ORDER BY similarity DESC LIMIT %s",
-            (embedding, embedding, threshold, limit),
-        )
-        return cur.fetchall()
-
-
-def insert_dataset(conn, texto: str, id_intencion: int,
-                   embedding: Optional[list] = None,
-                   origen: str = "manual") -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO chatbot_dataset (texto, id_intencion, embedding, origen) "
-            "VALUES (%s, %s, %s::vector, %s) RETURNING id",
-            (texto, id_intencion, embedding, origen),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def update_embedding(conn, record_id: int, embedding: list):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_dataset SET embedding = %s::vector WHERE id = %s",
-            (embedding, record_id),
-        )
-        conn.commit()
-
-
-def get_pendientes_embedding(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, texto FROM chatbot_dataset WHERE embedding IS NULL"
-        )
-        return cur.fetchall()
-
-
-# ── chatbot_respuesta ──────────────────────────────────────────────────
-
-def get_respuesta_by_intencion(conn, id_intencion: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, respuesta_texto, tipo, prioridad, veces_usada "
-            "FROM chatbot_respuesta "
-            "WHERE id_intencion = %s AND activa = TRUE "
-            "ORDER BY prioridad DESC, veces_usada DESC LIMIT 1",
-            (id_intencion,),
-        )
-        return cur.fetchone()
-
-
-def get_all_respuestas(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT r.id, r.respuesta_texto, r.tipo, r.prioridad, "
-            "r.activa, r.veces_usada, i.nombre as intencion, r.id_intencion "
-            "FROM chatbot_respuesta r "
-            "JOIN chatbot_intencion i ON r.id_intencion = i.id "
-            "ORDER BY i.nombre, r.prioridad DESC"
-        )
-        return cur.fetchall()
-
-
-def get_respuesta_by_id(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT r.id, r.respuesta_texto, r.tipo, r.prioridad, "
-            "r.activa, r.veces_usada, i.nombre as intencion, r.id_intencion "
-            "FROM chatbot_respuesta r "
-            "JOIN chatbot_intencion i ON r.id_intencion = i.id "
-            "WHERE r.id = %s",
-            (id,),
-        )
-        return cur.fetchone()
-
-
-def create_respuesta(conn, id_intencion: int, respuesta_texto: str,
-                     tipo: str = "texto", prioridad: int = 1) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO chatbot_respuesta (id_intencion, respuesta_texto, tipo, prioridad) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (id_intencion, respuesta_texto, tipo, prioridad),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def update_respuesta(conn, id: int, respuesta_texto: str,
-                     tipo: str = "texto", prioridad: int = 1,
-                     activa: Optional[bool] = None):
-    with conn.cursor() as cur:
-        sql = "UPDATE chatbot_respuesta SET respuesta_texto = %s, tipo = %s, prioridad = %s"
-        params: list = [respuesta_texto, tipo, prioridad]
-        if activa is not None:
-            sql += ", activa = %s"
-            params.append(activa)
-        sql += " WHERE id = %s"
-        params.append(id)
-        cur.execute(sql, params)
-        conn.commit()
-
-
-def soft_delete_respuesta(conn, id: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_respuesta SET activa = FALSE WHERE id = %s",
-            (id,),
-        )
-        conn.commit()
-
-
-def increment_veces_usada(conn, id_respuesta: int):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_respuesta SET veces_usada = veces_usada + 1 WHERE id = %s",
-            (id_respuesta,),
-        )
-        conn.commit()
 
 
 # ── chatbot_conversacion ───────────────────────────────────────────────
@@ -348,6 +41,15 @@ def update_conversacion_nombre(conn, id_conversacion: int, nombre_cliente: str):
         conn.commit()
 
 
+def update_conversacion_estado(conn, id_conversacion: int, activa: bool):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE chatbot_conversacion SET activa = %s WHERE id = %s",
+            (activa, id_conversacion),
+        )
+        conn.commit()
+
+
 def get_conversacion(conn, id_conversacion: int):
     with conn.cursor() as cur:
         cur.execute(
@@ -361,12 +63,27 @@ def get_conversacion(conn, id_conversacion: int):
 def get_conversaciones_by_usuario(conn, id_usuario: int, limit: int = 20):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, id_usuario, activa, iniciado_en, finalizado_en "
+            "SELECT id, id_usuario, nombre_cliente, activa, iniciado_en, finalizado_en "
             "FROM chatbot_conversacion WHERE id_usuario = %s "
             "ORDER BY iniciado_en DESC LIMIT %s",
             (id_usuario, limit),
         )
         return cur.fetchall()
+
+
+def delete_old_conversations(conn, id_usuario: int, keep: int = 5) -> int:
+    """Elimina conversaciones antiguas dejando solo las `keep` más recientes."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM chatbot_conversacion "
+            "WHERE id_usuario = %s AND id NOT IN ("
+            "  SELECT id FROM chatbot_conversacion "
+            "  WHERE id_usuario = %s ORDER BY iniciado_en DESC LIMIT %s"
+            ")",
+            (id_usuario, id_usuario, keep),
+        )
+        conn.commit()
+        return cur.rowcount
 
 
 def cerrar_conversacion(conn, id_conversacion: int):
@@ -382,18 +99,13 @@ def cerrar_conversacion(conn, id_conversacion: int):
 # ── chatbot_mensaje ────────────────────────────────────────────────────
 
 def insert_mensaje(conn, id_conversacion: int, rol: str, contenido: str,
-                    tipo_resolucion: str = "estatica",
-                   id_intencion: Optional[int] = None,
-                   confianza_ml: Optional[float] = None,
-                   modelo_usado: Optional[str] = None) -> int:
+                   tipo_resolucion: str = "estatica") -> int:
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO chatbot_mensaje "
-            "(id_conversacion, rol, contenido, tipo_resolucion, "
-            "id_intencion, confianza_ml, modelo_usado) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-            (id_conversacion, rol, contenido, tipo_resolucion,
-             id_intencion, confianza_ml, modelo_usado),
+            "(id_conversacion, rol, contenido, tipo_resolucion) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (id_conversacion, rol, contenido, tipo_resolucion),
         )
         conn.commit()
         return cur.fetchone()[0]
@@ -477,8 +189,7 @@ def get_pendiente_by_id(conn, id: int):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT p.id, p.contenido, p.resuelta, p.creado_en "
-            "FROM chatbot_pregunta_pendiente p "
-            "WHERE p.id = %s",
+            "FROM chatbot_pregunta_pendiente p WHERE p.id = %s",
             (id,),
         )
         return cur.fetchone()
@@ -487,8 +198,7 @@ def get_pendiente_by_id(conn, id: int):
 def marcar_pendiente_resuelta(conn, id_pendiente: int):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE chatbot_pregunta_pendiente "
-            "SET resuelta = TRUE WHERE id = %s",
+            "UPDATE chatbot_pregunta_pendiente SET resuelta = TRUE WHERE id = %s",
             (id_pendiente,),
         )
         conn.commit()
@@ -497,326 +207,199 @@ def marcar_pendiente_resuelta(conn, id_pendiente: int):
 def resolver_pendiente(conn, id_pendiente: int):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE chatbot_pregunta_pendiente "
-            "SET resuelta = TRUE WHERE id = %s",
+            "UPDATE chatbot_pregunta_pendiente SET resuelta = TRUE WHERE id = %s",
             (id_pendiente,),
         )
         conn.commit()
 
 
-# ── documento_base (RAG) ───────────────────────────────────────────────
+# ── centro_conocimiento (Agentic RAG) ──────────────────────────────────
 
-def get_documento_by_id(conn, id: int):
+def get_conocimiento_by_id(conn, id: int):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, titulo, contenido, categoria, fuente, archivo_pdf, "
-            "activo, creado_en, actualizado_en "
-            "FROM documento_base WHERE id = %s",
+            "SELECT id, titulo, contenido, tags, activo, fecha_actualizacion "
+            "FROM centro_conocimiento WHERE id = %s",
             (id,),
         )
         return cur.fetchone()
 
 
-def query_documentos(conn, query: str = "", categoria: str = "",
-                     activo: Optional[bool] = None):
+def query_conocimiento(conn, query: str = "", tags: list[str] | None = None,
+                       activo: Optional[bool] = None):
     with conn.cursor() as cur:
         sql = (
-            "SELECT id, titulo, contenido, categoria, fuente, archivo_pdf, "
-            "activo, creado_en, actualizado_en "
-            "FROM documento_base WHERE 1=1"
+            "SELECT id, titulo, contenido, tags, activo, fecha_actualizacion "
+            "FROM centro_conocimiento WHERE 1=1"
         )
-        params: list = []
+        params: list[Any] = []
         if query:
             sql += " AND (titulo ILIKE %s OR contenido ILIKE %s)"
             params.extend([f"%{query}%", f"%{query}%"])
-        if categoria:
-            sql += " AND categoria = %s"
-            params.append(categoria)
+        if tags:
+            sql += " AND tags && %s"
+            params.append(tags)
         if activo is not None:
             sql += " AND activo = %s"
             params.append(activo)
-        sql += " ORDER BY titulo"
+        sql += " ORDER BY fecha_actualizacion DESC"
         cur.execute(sql, params)
         return cur.fetchall()
 
 
-def insert_documento(conn, titulo: str, contenido: str, embedding: list,
-                     categoria: str, fuente: str = "", archivo_pdf: str = "") -> int:
+def insert_conocimiento(conn, titulo: str, contenido: str, embedding: list,
+                        tags: list[str]) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO documento_base (titulo, contenido, embedding, categoria, fuente, archivo_pdf) "
-            "VALUES (%s, %s, %s::vector, %s, %s, %s) RETURNING id",
-            (titulo, contenido, embedding, categoria, fuente, archivo_pdf),
+            "INSERT INTO centro_conocimiento (titulo, contenido, embedding, tags) "
+            "VALUES (%s, %s, %s::vector, %s) RETURNING id",
+            (titulo, contenido, embedding, tags),
         )
         conn.commit()
         return cur.fetchone()[0]
 
 
-def update_documento(conn, id: int, titulo: str, contenido: str, categoria: str,
-                     fuente: str = "", archivo_pdf: str = ""):
+def update_conocimiento(conn, id: int, titulo: str, contenido: str, tags: list[str]):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE documento_base SET titulo = %s, contenido = %s, "
-            "categoria = %s, fuente = %s, archivo_pdf = %s, actualizado_en = NOW() "
-            "WHERE id = %s",
-            (titulo, contenido, categoria, fuente, archivo_pdf, id),
+            "UPDATE centro_conocimiento SET titulo = %s, contenido = %s, tags = %s, "
+            "fecha_actualizacion = NOW() WHERE id = %s",
+            (titulo, contenido, tags, id),
         )
         conn.commit()
 
 
-def update_embedding_documento(conn, id: int, embedding: list):
+def update_embedding_conocimiento(conn, id: int, embedding: list):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE documento_base SET embedding = %s::vector, actualizado_en = NOW() "
-            "WHERE id = %s",
+            "UPDATE centro_conocimiento SET embedding = %s::vector, "
+            "fecha_actualizacion = NOW() WHERE id = %s",
             (embedding, id),
         )
         conn.commit()
 
 
-def soft_delete_documento(conn, id: int):
+def soft_delete_conocimiento(conn, id: int):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE documento_base SET activo = FALSE, actualizado_en = NOW() "
-            "WHERE id = %s",
+            "UPDATE centro_conocimiento SET activo = FALSE, "
+            "fecha_actualizacion = NOW() WHERE id = %s",
             (id,),
         )
         conn.commit()
 
 
-def desactivar_documentos_por_fuente(conn, fuente: str):
+def search_conocimiento_hibrido(conn, query_text: str, embedding: list,
+                                limit: int = 20,
+                                vector_weight: float = 0.80,
+                                trgm_weight: float = 0.20):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE documento_base SET activo = FALSE, actualizado_en = NOW() "
-            "WHERE fuente = %s",
-            (fuente,),
-        )
-        conn.commit()
-
-
-def search_documentos(conn, embedding, categoria: Optional[str] = None,
-                      limit: int = 3):
-    with conn.cursor() as cur:
-        if categoria:
-            cur.execute(
-                "SELECT id, titulo, contenido, categoria, fuente, "
-                "1 - (embedding <=> %s::vector) as similarity "
-                "FROM documento_base "
-                "WHERE categoria = %s AND activo = TRUE AND embedding IS NOT NULL "
-                "ORDER BY similarity DESC LIMIT %s",
-                (embedding, categoria, limit),
-            )
-        else:
-            cur.execute(
-                "SELECT id, titulo, contenido, categoria, fuente, "
-                "1 - (embedding <=> %s::vector) as similarity "
-                "FROM documento_base "
-                "WHERE activo = TRUE AND embedding IS NOT NULL "
-                "ORDER BY similarity DESC LIMIT %s",
-                (embedding, limit),
-            )
-        return cur.fetchall()
-
-
-# ── chatbot_prediccion ─────────────────────────────────────────────────
-
-def insert_prediccion(conn, texto_usuario: str, intencion_predicha: str,
-                      confianza: float) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO chatbot_prediccion (texto_usuario, intencion_predicha, confianza) "
-            "VALUES (%s, %s, %s) RETURNING id",
-            (texto_usuario, intencion_predicha, confianza),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def get_predicciones(conn, incorrectas: bool = False, limit: int = 100):
-    with conn.cursor() as cur:
-        if incorrectas:
-            cur.execute(
-                "SELECT id, texto_usuario, intencion_predicha, confianza, "
-                "correcta, fecha "
-                "FROM chatbot_prediccion WHERE correcta = FALSE "
-                "ORDER BY fecha DESC LIMIT %s",
-                (limit,),
-            )
-        else:
-            cur.execute(
-                "SELECT id, texto_usuario, intencion_predicha, confianza, "
-                "correcta, fecha "
-                "FROM chatbot_prediccion ORDER BY fecha DESC LIMIT %s",
-                (limit,),
-            )
-        return cur.fetchall()
-
-
-def marcar_prediccion_correcta(conn, id_prediccion: int, correcta: bool):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE chatbot_prediccion SET correcta = %s WHERE id = %s",
-            (correcta, id_prediccion),
-        )
-        conn.commit()
-
-
-# ── entrenamiento_pendiente ────────────────────────────────────────────
-
-def encolar_entrenamiento(conn, id_dataset: int) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO entrenamiento_pendiente (id_dataset) VALUES (%s) RETURNING id",
-            (id_dataset,),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def count_pendientes_entrenamiento(conn) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(*) FROM entrenamiento_pendiente WHERE procesado = FALSE"
-        )
-        return cur.fetchone()[0]
-
-
-def count_nuevos_validados(conn) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(*) FROM chatbot_dataset cd "
-            "WHERE cd.validado = TRUE AND cd.activo = TRUE "
-            "AND cd.creado_en > COALESCE("
-            "  (SELECT MAX(tr.fecha) FROM chatbot_training tr "
-            "   WHERE tr.estado = 'completado'), "
-            "  '1970-01-01'::timestamp)"
-        )
-        return cur.fetchone()[0]
-
-
-def get_pendientes_entrenamiento(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT ep.id, ep.id_dataset, cd.texto, cd.id_intencion, "
-            "ci.nombre as intencion, ep.fecha "
-            "FROM entrenamiento_pendiente ep "
-            "JOIN chatbot_dataset cd ON ep.id_dataset = cd.id "
-            "JOIN chatbot_intencion ci ON cd.id_intencion = ci.id "
-            "WHERE ep.procesado = FALSE ORDER BY ep.fecha"
+            "SELECT ck.id, ck.titulo, ck.contenido, "
+            "(%s * (1 - (ck.embedding <=> %s::vector)) "
+            "+ %s * similarity(ck.contenido, %s)) as score "
+            "FROM centro_conocimiento ck "
+            "WHERE ck.activo = TRUE AND ck.embedding IS NOT NULL "
+            "ORDER BY score DESC LIMIT %s",
+            (vector_weight, embedding, trgm_weight, query_text, limit),
         )
         return cur.fetchall()
 
 
-def marcar_entrenamiento_procesado(conn, id_pendiente: int):
+# ── agente_memoria (persistencia del agente LLM) ───────────────────────
+
+def get_agent_memory(conn, id_conversacion: int):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE entrenamiento_pendiente SET procesado = TRUE WHERE id = %s",
-            (id_pendiente,),
-        )
-        conn.commit()
-
-
-# ── modelo_ml ──────────────────────────────────────────────────────────
-
-def crear_modelo(conn, nombre: str, version: str,
-                 accuracy: float = 0.0, precision: float = 0.0,
-                 recall: float = 0.0, f1_score: float = 0.0) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO modelo_ml (nombre, version, accuracy, precision, recall, f1_score) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (nombre, version, accuracy, precision, recall, f1_score),
-        )
-        conn.commit()
-        return cur.fetchone()[0]
-
-
-def get_modelo_activo(conn):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, nombre, version, accuracy, precision, recall, f1_score, "
-            "activo, fecha_entrenamiento "
-            "FROM modelo_ml WHERE activo = TRUE LIMIT 1"
+            "SELECT contexto, resumen, total_mensajes, actualizado_en "
+            "FROM agente_memoria WHERE id_conversacion = %s",
+            (id_conversacion,),
         )
         return cur.fetchone()
 
 
-def set_modelo_activo(conn, id_modelo: int):
-    with conn.cursor() as cur:
-        cur.execute("UPDATE modelo_ml SET activo = FALSE WHERE activo = TRUE")
-        cur.execute("UPDATE modelo_ml SET activo = TRUE WHERE id = %s", (id_modelo,))
-        conn.commit()
-
-
-def get_historial_modelos(conn, limit: int = 10):
+def upsert_agent_memory(conn, id_conversacion: int, contexto: str,
+                        resumen: str = "", total_mensajes: int = 0):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, nombre, version, accuracy, precision, recall, f1_score, "
-            "activo, fecha_entrenamiento "
-            "FROM modelo_ml ORDER BY fecha_entrenamiento DESC LIMIT %s",
-            (limit,),
-        )
-        return cur.fetchall()
-
-
-def update_modelo_metrics(conn, id_modelo: int,
-                          accuracy: float, precision: float,
-                          recall: float, f1_score: float):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE modelo_ml SET accuracy = %s, precision = %s, "
-            "recall = %s, f1_score = %s WHERE id = %s",
-            (accuracy, precision, recall, f1_score, id_modelo),
+            "INSERT INTO agente_memoria (id_conversacion, contexto, resumen, total_mensajes, actualizado_en) "
+            "VALUES (%s, %s, %s, %s, NOW()) "
+            "ON CONFLICT (id_conversacion) "
+            "DO UPDATE SET contexto = EXCLUDED.contexto, "
+            "              resumen = EXCLUDED.resumen, "
+            "              total_mensajes = EXCLUDED.total_mensajes, "
+            "              actualizado_en = NOW()",
+            (id_conversacion, contexto, resumen, total_mensajes),
         )
         conn.commit()
 
 
-# ── chatbot_training ───────────────────────────────────────────────────
-
-def iniciar_training(conn, modelo_version: str) -> int:
+def delete_agent_memory(conn, id_conversacion: int):
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO chatbot_training (modelo_version, estado) "
-            "VALUES (%s, 'en_progreso') RETURNING id",
-            (modelo_version,),
+            "DELETE FROM agente_memoria WHERE id_conversacion = %s",
+            (id_conversacion,),
+        )
+        conn.commit()
+
+
+# ── Resúmenes de bitácoras (worker RabbitMQ) ───────────────────────────
+
+def insert_bitacora_resumen(
+    conn,
+    solicitud_id: int,
+    estudiante_id: int,
+    observaciones: str,
+    resumen: str,
+    temas_detectados: str | None = None,
+) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO bitacora_resumen (solicitud_id, estudiante_id, observaciones, resumen, temas_detectados) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (solicitud_id, estudiante_id, observaciones, resumen, temas_detectados),
         )
         conn.commit()
         return cur.fetchone()[0]
 
 
-def completar_training(conn, id_training: int, ejemplos_usados: int,
-                       accuracy: float, precision: float, recall: float,
-                       f1_score: float, loss: float = 0.0, estado: str = "completado"):
+def get_bitacora_resumen_by_solicitud(conn, solicitud_id: int):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE chatbot_training SET estado = %s, ejemplos_usados = %s, "
-            "accuracy = %s, precision = %s, recall = %s, f1_score = %s, "
-            "loss = %s WHERE id = %s",
-            (estado, ejemplos_usados, accuracy, precision, recall,
-             f1_score, loss, id_training),
+            "SELECT id, solicitud_id, estudiante_id, observaciones, resumen, temas_detectados, generado_en "
+            "FROM bitacora_resumen WHERE solicitud_id = %s ORDER BY generado_en DESC LIMIT 1",
+            (solicitud_id,),
         )
-        conn.commit()
+        return cur.fetchone()
 
 
-def fail_training(conn, id_training: int):
+def get_bitacora_resumenes_by_estudiante(conn, estudiante_id: int, limit: int = 20):
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE chatbot_training SET estado = 'fallido' "
-            "WHERE id = %s",
-            (id_training,),
-        )
-        conn.commit()
-
-
-def get_training_history(conn, limit: int = 20):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, modelo_version, ejemplos_usados, accuracy, precision, "
-            "recall, f1_score, loss, estado, fecha "
-            "FROM chatbot_training ORDER BY fecha DESC LIMIT %s",
-            (limit,),
+            "SELECT id, solicitud_id, estudiante_id, observaciones, resumen, temas_detectados, generado_en "
+            "FROM bitacora_resumen WHERE estudiante_id = %s ORDER BY generado_en DESC LIMIT %s",
+            (estudiante_id, limit),
         )
         return cur.fetchall()
+
+
+def insert_evento_procesado(conn, evento_id: str, tipo_evento: str, datos: dict):
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO worker_evento_procesado (evento_id, tipo_evento, datos) "
+            "VALUES (%s, %s, %s) ON CONFLICT (evento_id) DO NOTHING",
+            (evento_id, tipo_evento, json.dumps(datos, ensure_ascii=False) if datos else None),
+        )
+        conn.commit()
+
+
+def existe_evento_procesado(conn, evento_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM worker_evento_procesado WHERE evento_id = %s LIMIT 1",
+            (evento_id,),
+        )
+        return cur.fetchone() is not None
 
 
 # ── Métricas de uso ────────────────────────────────────────────────────
@@ -845,14 +428,16 @@ def count_pendientes(conn, resuelta: bool = False) -> int:
         return cur.fetchone()[0]
 
 
-def top_intenciones(conn, limit: int = 10):
+def top_tipos_resolucion(conn, limit: int = 10):
+    """
+    Ahora agrupa por tipo_resolucion en lugar de intención.
+    SetFit fue eliminado, por lo que las intenciones ya no aplican.
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT i.nombre, COUNT(m.id) as total "
-            "FROM chatbot_mensaje m "
-            "JOIN chatbot_intencion i ON i.id = m.id_intencion "
-            "WHERE m.rol = 'bot' "
-            "GROUP BY i.nombre "
+            "SELECT tipo_resolucion, COUNT(*) as total "
+            "FROM chatbot_mensaje WHERE rol = 'bot' "
+            "GROUP BY tipo_resolucion "
             "ORDER BY total DESC LIMIT %s",
             (limit,),
         )
@@ -860,6 +445,9 @@ def top_intenciones(conn, limit: int = 10):
 
 
 def resolucion_por_tipo(conn):
+    """
+    Ahora devuelve conteo por tipo_resolucion (agente, estatica, etc.).
+    """
     with conn.cursor() as cur:
         cur.execute(
             "SELECT tipo_resolucion, COUNT(*) as total "
