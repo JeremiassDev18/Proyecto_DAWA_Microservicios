@@ -1,6 +1,6 @@
 import {
   Dashboard, Chat, Assessment,
-  Pending, People, School, CalendarToday, Book, Assignment, Description, Settings,
+  Pending, People, School, CalendarToday, Book, Assignment, Description, Settings, Groups,
 } from '@mui/icons-material'
 import { ROUTES } from './routes'
 import { ROLES } from './permissions'
@@ -18,6 +18,7 @@ export const menuItems: MenuItem[] = [
   { icon: Assessment, label: 'Métricas', path: ROUTES.METRICAS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
   { icon: Pending, label: 'Pendientes IA', path: ROUTES.PENDIENTES, roles: [ROLES.ADMIN] },
   { icon: People, label: 'Administración', path: ROUTES.ADMIN_USUARIOS, roles: [ROLES.ADMIN] },
+  { icon: Groups, label: 'Maestros', path: ROUTES.MAESTROS, roles: [ROLES.ADMIN] },
   { icon: School, label: 'Académico', path: ROUTES.ACADEMICO_CARRERAS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
   { icon: CalendarToday, label: 'Tutorías', path: ROUTES.TUTORIAS },
   { icon: Book, label: 'Mis Materias', path: ROUTES.ACADEMICO_MATERIAS, roles: [ROLES.ESTUDIANTE] },

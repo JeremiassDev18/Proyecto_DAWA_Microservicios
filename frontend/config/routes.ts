@@ -19,4 +19,5 @@ export const ROUTES = {
   ACADEMICO_DOCENTES: '/academico/docentes',
   ACADEMICO_MATERIAS: '/academico/materias',
   ACADEMICO_BITACORA: '/academico/bitacora',
+  MAESTROS: '/academico/docentes',
 } as const
