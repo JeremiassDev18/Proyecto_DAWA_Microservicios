@@ -116,6 +116,12 @@ export const useChat = () => {
     setPendingNew(true)
   }, [])
 
+  const clearChat = useCallback(() => {
+    setCurrentConversationId(null)
+    setMessages([])
+    setPendingNew(true)
+  }, [])
+
   return {
     conversations,
     messages,
@@ -126,6 +132,7 @@ export const useChat = () => {
     sendMessage,
     sendFeedback,
     newConversation,
+    clearChat,
     refetchConversations,
   }
 }

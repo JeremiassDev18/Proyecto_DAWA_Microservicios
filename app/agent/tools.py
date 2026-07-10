@@ -56,12 +56,12 @@ def get_available_tools() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="buscar_docentes",
-            description="Buscar profesores por nombre o materia. Usa 'materia' para 'quién enseña X'.",
+            description="SIEMPRE usa esto cuando el usuario pregunte por profesores, docentes, quién enseña algo, o materias de profesores. Param 'materia' con el nombre de la materia. Param 'posesivo'='mios' para profesores del estudiante.",
             parameters=[
-                ToolParameter(name="consulta", type="string", description="Nombre del profesor o materia", required=True),
-                ToolParameter(name="estudiante_id", type="integer", description="Para 'mios'", required=False),
-                ToolParameter(name="posesivo", type="string", description="'mios' o 'todos'", required=False),
-                ToolParameter(name="materia", type="string", description="Nombre de materia para buscar sus docentes", required=False),
+                ToolParameter(name="consulta", type="string", description="Texto de búsqueda (nombre del profesor o materia)", required=True),
+                ToolParameter(name="estudiante_id", type="integer", description="ID del estudiante", required=False),
+                ToolParameter(name="posesivo", type="string", description="'mios' para profesores propios, 'todos' para todos", required=False),
+                ToolParameter(name="materia", type="string", description="Nombre de la materia para buscar sus docentes", required=False),
             ],
         ),
         ToolDefinition(
@@ -96,5 +96,31 @@ def get_available_tools() -> list[ToolDefinition]:
                 ToolParameter(name="motivo", type="string", description="Motivo", required=True),
                 ToolParameter(name="usuario_id", type="integer", description="ID usuario (opcional)", required=False),
             ],
+        ),
+        ToolDefinition(
+            name="listar_docentes",
+            description="Listar todos los docentes del sistema. Opcionalmente buscar por nombre o materia.",
+            parameters=[
+                ToolParameter(name="consulta", type="string", description="Buscar por nombre o materia (opcional)", required=False),
+            ],
+        ),
+        ToolDefinition(
+            name="listar_estudiantes",
+            description="Listar todos los estudiantes del sistema. Opcionalmente buscar por nombre.",
+            parameters=[
+                ToolParameter(name="consulta", type="string", description="Buscar por nombre (opcional)", required=False),
+            ],
+        ),
+        ToolDefinition(
+            name="listar_tutorias",
+            description="Listar todas las tutorías del sistema con estado y tema.",
+            parameters=[
+                ToolParameter(name="consulta", type="string", description="Filtrar por tema (opcional)", required=False),
+            ],
+        ),
+        ToolDefinition(
+            name="estadisticas_sistema",
+            description="Estadísticas generales: total docentes, estudiantes, tutorías, carreras.",
+            parameters=[],
         ),
     ]

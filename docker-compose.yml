@@ -120,12 +120,22 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./docker/ollama-entrypoint.sh:/usr/local/bin/ollama-entrypoint.sh:ro
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     networks:
       - chatbot-network
     deploy:
       resources:
         limits:
           memory: 4G
+    entrypoint: ["/bin/sh", "/usr/local/bin/ollama-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list 2>/dev/null | grep -q '${OLLAMA_MODEL:-qwen2.5:3b}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
 
   # ── Chatbot ──
   chatbot-db:
@@ -153,8 +163,10 @@ services:
     container_name: chatbot-service
     restart: unless-stopped
     depends_on:
-      - chatbot-db
-      - ollama
+      chatbot-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
     ports:
       - "5004:5004"
     environment:
@@ -177,7 +189,7 @@ services:
       AI_ENGINE: ${AI_ENGINE:-qwen}
       OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
-      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-60}
       OLLAMA_MAX_TOOL_ITERATIONS: ${OLLAMA_MAX_TOOL_ITERATIONS:-3}
       RAG_TOP_K: ${RAG_TOP_K:-5}
       RAG_CANDIDATES: ${RAG_CANDIDATES:-20}
@@ -198,9 +210,14 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "app.worker.summary_worker"]
     depends_on:
-      - chatbot-db
-      - rabbitmq
-      - tutorias-service
+      chatbot-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      tutorias-service:
+        condition: service_started
+      ollama:
+        condition: service_healthy
     environment:
       DB_HOST: chatbot-db
       DB_PORT: 5432
@@ -216,7 +233,7 @@ services:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change_me_in_production}
       OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
-      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-60}
     networks:
       - chatbot-network
       - tutorias-network

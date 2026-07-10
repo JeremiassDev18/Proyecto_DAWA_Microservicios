@@ -9,6 +9,7 @@ Responsabilidades:
 5. Entregar la respuesta final redactada por el LLM.
 """
 
+import re
 from typing import Any
 
 from app.core.config import settings
@@ -24,6 +25,84 @@ from .prompt import build_system_prompt
 from .schemas import AgentResponse, ToolCall, ToolDefinition, ToolResult
 from .tool_validator import ToolValidationError, ToolValidator
 from .tools import get_available_tools
+
+
+# Patrones para detectar preguntas sobre docentes/materias y forzar tool call.
+_DOCEMTE_PATTERNS = [
+    re.compile(r"qui[eé]n\s+(ense[nñ]a|imparte|da|dicta|imparte\s+clase|es\s+el\s+profesor|es\s+el\s+docente)\s+(.+)", re.IGNORECASE),
+    re.compile(r"(profesor|docente)\s+(de|del|para)\s+(.+)", re.IGNORECASE),
+    re.compile(r"(materias?|asignaturas?)\s+(del?\s+)?(profesor|docente)\s+(.+)", re.IGNORECASE),
+    re.compile(r"qui[eé]n\s+me\s+(ense[nñ]a|imparte)", re.IGNORECASE),
+    re.compile(r"(qué|que)\s+(profesor|docente)\s+(tiene|dicta|imparte|ense[nñ]a)\s+(.+)", re.IGNORECASE),
+]
+_MIS_PROFESORES_RE = re.compile(r"mis\s+(profesores?|docentes?|profes?)", re.IGNORECASE)
+
+
+# ─── Admin pre-routing patterns ──────────────────────────────────────────────
+_ADMIN_STATS_RE = re.compile(
+    r"(cu[aá]nto?s?|cu[aá]nta?s?|total|cu[aá]l|n[uú]mero\s+de)\s+(docentes?|estudiantes?|tutor[ií]as?|carreras?|facultades?)",
+    re.IGNORECASE,
+)
+_ADMIN_LIST_DOCENTES_RE = re.compile(
+    r"(listar?|mostrar?|ver|enseñar|dar)\s+(los?\s+)?(docentes?|profesores?|profes?)",
+    re.IGNORECASE,
+)
+_ADMIN_LIST_ESTUDIANTES_RE = re.compile(
+    r"(listar?|mostrar?|ver|enseñar|dar)\s+(los?\s+)?estudiantes?",
+    re.IGNORECASE,
+)
+_ADMIN_LIST_TUTORIAS_RE = re.compile(
+    r"(listar?|mostrar?|ver|enseñar|dar)\s+(las?\s+)?tutor[ií]as?",
+    re.IGNORECASE,
+)
+
+
+def _detect_admin_query(mensaje: str) -> dict | None:
+    """Detecta preguntas admin (estadísticas, listar) y retorna tool a ejecutar."""
+    msg = mensaje.strip()
+
+    m = _ADMIN_STATS_RE.search(msg)
+    if m:
+        entity = m.group(2).lower().rstrip("s")
+        if "docente" in entity or "profesor" in entity:
+            return {"tool": "listar_docentes", "params": {}}
+        if "estudiante" in entity:
+            return {"tool": "listar_estudiantes", "params": {}}
+        if "tutori" in entity:
+            return {"tool": "listar_tutorias", "params": {}}
+        return {"tool": "estadisticas_sistema", "params": {}}
+
+    if _ADMIN_LIST_DOCENTES_RE.search(msg):
+        return {"tool": "listar_docentes", "params": {}}
+    if _ADMIN_LIST_ESTUDIANTES_RE.search(msg):
+        return {"tool": "listar_estudiantes", "params": {}}
+    if _ADMIN_LIST_TUTORIAS_RE.search(msg):
+        return {"tool": "listar_tutorias", "params": {}}
+
+    return None
+
+
+def _detect_docente_query(mensaje: str) -> dict | None:
+    """Detecta preguntas sobre docentes/materias y extrae parámetros.
+    Retorna {'materia': '...' } o {'posesivo': 'mios' } o None."""
+    msg = mensaje.strip()
+
+    # "mis profesores/docentes"
+    if _MIS_PROFESORES_RE.search(msg):
+        return {"posesivo": "mios", "materia": None}
+
+    for pat in _DOCEMTE_PATTERNS:
+        m = pat.search(msg)
+        if m:
+            groups = m.groups()
+            # El último grupo siempre es la materia (si existe)
+            materia = groups[-1].strip().rstrip("?").strip()
+            # Limpiar artículos sueltos al inicio
+            materia = re.sub(r"^(el|la|los|las|un|una|del|de\s+la|al)\s+", "", materia, flags=re.IGNORECASE).strip()
+            if materia:
+                return {"materia": materia, "posesivo": None}
+
+    return None
 
 
 # Palabras clave para detectar contenido sensible que requiera escalamiento.
@@ -90,6 +169,80 @@ class AgentPlanner:
                 mensaje=result[0],
                 intencion_detectada="escalar_conversacion",
                 herramientas_usadas=["escalar_conversacion"],
+            )
+
+        # Pre-routing admin: estadísticas y listados del sistema.
+        admin_match = _detect_admin_query(mensaje)
+        if admin_match and self.rol in ("admin", "docente", "manager"):
+            tool_name = admin_match["tool"]
+            tool_params = admin_match["params"]
+            logger.info(f"[AgentPlanner] pre-routing admin: tool={tool_name}")
+            if tool_name == "estadisticas_sistema":
+                result = self._admin.estadisticas_sistema()
+            elif tool_name == "listar_docentes":
+                result = self._admin.listar_docentes_admin(consulta=tool_params.get("consulta", ""))
+            elif tool_name == "listar_estudiantes":
+                result = self._admin.listar_estudiantes_admin(consulta=tool_params.get("consulta", ""))
+            elif tool_name == "listar_tutorias":
+                result = self._admin.listar_tutorias_admin(consulta=tool_params.get("consulta", ""))
+            else:
+                result = self._admin.estadisticas_sistema()
+            herramientas_usadas = [tool_name]
+            self.memory.update_state(result[1])
+            self.memory.add("tool", result[0], name=tool_name)
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else result[0]
+            # Si el LLM devuelve basura (función o muy corto), usar resultado raw.
+            if (not final_content
+                    or final_content.strip().endswith("()")
+                    or len(final_content.strip()) < 10):
+                final_content = result[0]
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada=tool_name,
+                herramientas_usadas=herramientas_usadas,
+            )
+
+        # Pre-routing: forzar buscar_docentes cuando el modelo no lo hace.
+        docente_match = _detect_docente_query(mensaje)
+        if docente_match:
+            materia = docente_match.get("materia")
+            posesivo = docente_match.get("posesivo") or "todos"
+            consulta = materia or ""
+            logger.info(f"[AgentPlanner] pre-routing docente: materia={materia} posesivo={posesivo}")
+            result = self._admin.buscar_docentes(
+                consulta=consulta,
+                estudiante_id=self.estudiante_id,
+                posesivo=posesivo,
+                materia=materia,
+            )
+            herramientas_usadas = ["buscar_docentes"]
+            self.memory.update_state(result[1])
+            self.memory.add("tool", result[0], name="buscar_docentes")
+            # Pedir al LLM que formatee la respuesta.
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else result[0]
+            # Si el LLM devuelve basura, usar resultado raw.
+            if (not final_content
+                    or final_content.strip().endswith("()")
+                    or len(final_content.strip()) < 10):
+                final_content = result[0]
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada="buscar_docentes",
+                herramientas_usadas=herramientas_usadas,
             )
 
         max_iterations = settings.OLLAMA_MAX_TOOL_ITERATIONS
@@ -276,6 +429,28 @@ class AgentPlanner:
                     usuario_id=self._param_optional_int(call.parameters, "usuario_id"),
                     db_conn=db_conn,
                 )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "listar_docentes":
+                content, state = self._admin.listar_docentes_admin(
+                    consulta=call.parameters.get("consulta") or "",
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "listar_estudiantes":
+                content, state = self._admin.listar_estudiantes_admin(
+                    consulta=call.parameters.get("consulta") or "",
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "listar_tutorias":
+                content, state = self._admin.listar_tutorias_admin(
+                    consulta=call.parameters.get("consulta") or "",
+                )
+                return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
+
+            if call.tool == "estadisticas_sistema":
+                content, state = self._admin.estadisticas_sistema()
                 return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
 
             return ToolResult(

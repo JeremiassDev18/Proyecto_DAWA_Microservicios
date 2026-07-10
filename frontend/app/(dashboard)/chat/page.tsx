@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
   Box,
-  Grid,
   Paper,
   Typography,
-  LinearProgress,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
-import { ConversationList } from '@/components/chat/ConversationList'
+import { DeleteSweep as CleanIcon } from '@mui/icons-material'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { useChat } from '@/hooks/useChat'
@@ -16,15 +16,12 @@ import { useToast } from '@/hooks/useToast'
 
 export default function ChatPage() {
   const {
-    conversations,
     messages,
-    currentConversationId,
     isLoading,
     isSending,
-    selectConversation,
     sendMessage,
     sendFeedback,
-    newConversation,
+    clearChat,
   } = useChat()
 
   const { showToast } = useToast()
@@ -53,97 +50,78 @@ export default function ChatPage() {
     sendFeedback(messageId, type === 'positive')
   }
 
-  const currentConversation = conversations.find(c => c.id === currentConversationId)
+  const handleClear = () => {
+    clearChat()
+    showToast('Chat limpiado', 'success')
+  }
 
   return (
     <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
-        Chat IA
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+          Chat IA
+        </Typography>
+        <Tooltip title="Limpiar chat">
+          <IconButton onClick={handleClear} color="default" size="small">
+            <CleanIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
-      <Grid container sx={{ flex: 1, overflow: 'hidden' }}>
-        <Grid size={{ xs: 12, md: 3 }} sx={{ height: '100%', pr: { md: 2 } }}>
-          <Paper sx={{ height: '100%', overflow: 'hidden' }}>
-            <ConversationList
-              conversations={conversations}
-              currentConversationId={currentConversationId || undefined}
-              onSelectConversation={selectConversation}
-              onNewConversation={newConversation}
-              isLoading={isLoading}
-            />
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 9 }} sx={{ height: '100%' }}>
-          <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="h6">
-                {currentConversation?.nombre_cliente || (currentConversationId ? 'Conversación' : 'Nueva conversación')}
+      <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+          {messages.length === 0 ? (
+            <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
+              <Typography variant="body1">
+                Escribe un mensaje para empezar
               </Typography>
-              {currentConversation && (
-                <Typography variant="caption" color="text.secondary">
-                  {currentConversation.total_mensajes || 0} mensajes
-                </Typography>
+            </Box>
+          ) : (
+            <>
+              {messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isUser={msg.rol === 'usuario'}
+                  onCopy={handleCopy}
+                  onFeedback={msg.rol === 'bot' ? handleFeedback : undefined}
+                />
+              ))}
+              {isSending && (
+                <MessageBubble
+                  message={{
+                    id: -1,
+                    conversacion_id: 0,
+                    rol: 'bot',
+                    contenido: '',
+                    creado_en: new Date().toISOString(),
+                  }}
+                  isUser={false}
+                  isLoading={true}
+                />
               )}
-            </Box>
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </Box>
 
-            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-              {messages.length === 0 ? (
-                <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                  <Typography variant="body1">
-                    {currentConversationId
-                      ? 'Escribe un mensaje para continuar la conversación'
-                      : 'Escribe un mensaje para empezar una conversación'}
-                  </Typography>
-                </Box>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <MessageBubble
-                      key={msg.id}
-                      message={msg}
-                      isUser={msg.rol === 'usuario'}
-                      onCopy={handleCopy}
-                      onFeedback={msg.rol === 'bot' ? handleFeedback : undefined}
-                    />
-                  ))}
-                  {isSending && (
-                    <MessageBubble
-                      message={{
-                        id: -1,
-                        conversacion_id: currentConversationId || -1,
-                        rol: 'bot',
-                        contenido: '',
-                        creado_en: new Date().toISOString(),
-                      }}
-                      isUser={false}
-                      isLoading={true}
-                    />
-                  )}
-                  <div ref={messagesEndRef} />
-                </>
-              )}
-            </Box>
+        {intentInfo && (
+          <Box sx={{ px: 2, py: 0.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">
+              Intención: <strong>{intentInfo.nombre}</strong> |
+              Confianza: <strong>{Math.round(intentInfo.confianza * 100)}%</strong>
+            </Typography>
+          </Box>
+        )}
 
-            {intentInfo && (
-              <Box sx={{ px: 2, py: 0.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary">
-                  Intención: <strong>{intentInfo.nombre}</strong> |
-                  Confianza: <strong>{Math.round(intentInfo.confianza * 100)}%</strong>
-                </Typography>
-              </Box>
-            )}
-
-            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-              <ChatInput
-                onSendMessage={sendMessage}
-                isLoading={isSending}
-                placeholder="Escribe aquí..."
-              />
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
+        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+          <ChatInput
+            onSendMessage={sendMessage}
+            isLoading={isSending}
+            placeholder="Escribe aquí..."
+          />
+        </Box>
+      </Paper>
     </Box>
   )
 }

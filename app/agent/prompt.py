@@ -26,10 +26,8 @@ def build_system_prompt(
     state_text: str = "",
     rol: str = "estudiante",
 ) -> str:
-    es_estudiante = estudiante_id is not None and rol == "estudiante"
+    es_estudiante = rol == "estudiante"
 
-    if not es_estudiante:
-        tools = [t for t in tools if t.name in ("buscar_conocimiento", "escalar_conversacion")]
     tools_text = _render_tools(tools)
 
     if es_estudiante:
@@ -40,12 +38,34 @@ def build_system_prompt(
             '"bitácoras"→<tool_call>'
             '{"name":"consultar_bitacoras","arguments":{"estudiante_id":1}}'
             "</tool_call>  "
-            '"profesor de álgebra"→<tool_call>'
+            '"quién enseña álgebra"→<tool_call>'
             '{"name":"buscar_docentes","arguments":{"consulta":"álgebra","materia":"álgebra"}}'
+            "</tool_call>  "
+            '"mis profesores"→<tool_call>'
+            '{"name":"buscar_docentes","arguments":{"consulta":"","posesivo":"mios","estudiante_id":1}}'
+            "</tool_call>  "
+            '"profesor de Programación"→<tool_call>'
+            '{"name":"buscar_docentes","arguments":{"consulta":"Programación","materia":"Programación"}}'
             "</tool_call>\n"
         )
     else:
-        examples = ""
+        examples = (
+            "Ej: \"cuántos docentes\"→<tool_call>"
+            '{"name":"estadisticas_sistema","arguments":{}}'
+            "</tool_call>  "
+            '"listar docentes"→<tool_call>'
+            '{"name":"listar_docentes","arguments":{}}'
+            "</tool_call>  "
+            '"listar estudiantes"→<tool_call>'
+            '{"name":"listar_estudiantes","arguments":{}}'
+            "</tool_call>  "
+            '"tutorías del sistema"→<tool_call>'
+            '{"name":"listar_tutorias","arguments":{}}'
+            "</tool_call>  "
+            '"profesor de Programación"→<tool_call>'
+            '{"name":"buscar_docentes","arguments":{"consulta":"Programación","materia":"Programación"}}'
+            "</tool_call>\n"
+        )
 
     return SYSTEM_PROMPT_TEMPLATE.format(
         estudiante_id=estudiante_id or "desconocido",

@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Configuración Ollama / agente LLM
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_MODEL: str = "qwen2.5:3b"
-    OLLAMA_TIMEOUT: int = 30
+    OLLAMA_TIMEOUT: int = 60
     OLLAMA_MAX_TOOL_ITERATIONS: int = 3
 
     # Embeddings (MiniLM para RAG)

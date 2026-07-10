@@ -46,6 +46,21 @@ def listar_docentes():
         resultado = []
 
         for docente in docentes:
+            paralelos = db.query(Paralelo).filter(
+                Paralelo.docente_id == docente.id,
+                Paralelo.estado == True,
+            ).all()
+
+            asignaturas_list = []
+            for p in paralelos:
+                asignatura = db.query(Asignatura).filter(Asignatura.id == p.asignatura_id).first()
+                if asignatura:
+                    asignaturas_list.append({
+                        "id": asignatura.id,
+                        "nombre": asignatura.nombre,
+                        "codigo": asignatura.codigo,
+                    })
+
             resultado.append({
                 "id": docente.id,
                 "nombres": docente.nombres,
@@ -56,7 +71,8 @@ def listar_docentes():
                 "facultad_id": docente.facultad_id,
                 "carga_horaria_maxima": docente.carga_horaria_maxima,
                 "estado": docente.estado,
-                "fecha_creacion": str(docente.fecha_creacion)
+                "fecha_creacion": str(docente.fecha_creacion),
+                "asignaturas": asignaturas_list,
             })
 
         return jsonify(resultado), 200
