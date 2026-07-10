@@ -44,7 +44,12 @@ export const adminService = {
 
   getDocentes: async (): Promise<Docente[]> => {
     const data = await api.admin.get<any>('/docentes/')
-    return data.docentes || data
+    const items = data.docentes || data
+    if (!Array.isArray(items)) return []
+    return items.map((d: any) => ({
+      ...d,
+      email: d.email || d.correo,
+    }))
   },
   getDocenteByEmail: async (email: string): Promise<Docente | null> => {
     const docentes = await adminService.getDocentes()

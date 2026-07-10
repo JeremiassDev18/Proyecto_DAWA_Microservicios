@@ -123,4 +123,9 @@ def get_available_tools() -> list[ToolDefinition]:
             description="Estadísticas generales: total docentes, estudiantes, tutorías, carreras.",
             parameters=[],
         ),
+        ToolDefinition(
+            name="listar_estudiantes_por_docente",
+            description="Las materias que imparte el docente y cuántos estudiantes tiene en cada una. Úsalo cuando el docente pregunte por sus asignaturas o sus estudiantes.",
+            parameters=[],
+        ),
     ]

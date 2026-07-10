@@ -47,6 +47,14 @@ export interface Docente {
   apellidos: string
   email: string
   activo?: boolean
+  telefono?: string
+  especialidad?: string
+  facultad_id?: number
+  facultad_nombre?: string
+  carga_horaria_maxima?: number
+  asignaturas?: { id: number; nombre: string; codigo?: string; nivel?: string; creditos?: number; num_estudiantes?: number }[]
+  total_asignaturas?: number
+  total_estudiantes?: number
 }
 
 export interface Estudiante {

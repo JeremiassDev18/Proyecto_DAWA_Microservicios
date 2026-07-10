@@ -273,3 +273,62 @@ class AdminAdapter:
         )
 
         return content, stats
+
+    def listar_estudiantes_por_docente(self, usuario_id: int) -> tuple[str, dict]:
+        """Lista las materias del docente y sus estudiantes asignados."""
+        logger.info(f"[AdminAdapter] listar_estudiantes_por_docente usuario_id={usuario_id}")
+
+        try:
+            docentes = self.admin._get("/api/administracion/docentes/")
+            docentes = docentes if isinstance(docentes, list) else []
+
+            docente = None
+            for d in docentes:
+                uid = d.get("usuario_id") or (d.get("usuario", {}) or {}).get("id")
+                if uid == usuario_id:
+                    docente = d
+                    break
+
+            if not docente:
+                return (
+                    f"No se encontró el perfil del docente (usuario_id={usuario_id}).",
+                    {},
+                )
+        except Exception as e:
+            logger.error(f"[AdminAdapter] listar_estudiantes_por_docente error: {e}")
+            return f"Error al obtener docente: {e}", {}
+
+        nombre_completo = f"{docente.get('nombre', '')} {docente.get('apellidos', '') or docente.get('apellido', '')}".strip()
+        asignaturas = docente.get("asignaturas", [])
+
+        if not asignaturas:
+            return (
+                f"El docente {nombre_completo} no tiene materias asignadas actualmente.",
+                {},
+            )
+
+        lineas = [f"Asignaturas de {nombre_completo}:\n"]
+
+        for asig in asignaturas:
+            nombre_materia = asig.get("nombre", "Sin nombre")
+            materia_id = asig.get("id")
+            semestre = asig.get("semestre", "")
+            num_estudiantes = asig.get("total_estudiantes", asig.get("estudiantes", 0))
+            paralelos = asig.get("paralelos", 0)
+            seccion = asig.get("seccion", "")
+
+            lineas.append(f"📚 {nombre_materia}")
+            if semestre:
+                lineas.append(f"   Semestre: {semestre}")
+            if seccion:
+                lineas.append(f"   Sección: {seccion}")
+            if paralelos and isinstance(paralelos, int) and paralelos > 1:
+                lineas.append(f"   Paralelos: {paralelos}")
+            if num_estudiantes and isinstance(num_estudiantes, int):
+                lineas.append(f"   Estudiantes asignados: {num_estudiantes}")
+            lineas.append("")
+
+        return "\n".join(lineas), {
+            "docente": nombre_completo,
+            "total_asignaturas": len(asignaturas),
+        }

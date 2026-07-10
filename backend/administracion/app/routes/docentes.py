@@ -43,6 +43,11 @@ def listar_docentes():
                     )
 
         docentes = query.all()
+
+        facultades_cache = {}
+        for f in db.query(Facultad).filter(Facultad.estado == True).all():
+            facultades_cache[f.id] = f.nombre
+
         resultado = []
 
         for docente in docentes:
@@ -54,12 +59,27 @@ def listar_docentes():
             asignaturas_list = []
             for p in paralelos:
                 asignatura = db.query(Asignatura).filter(Asignatura.id == p.asignatura_id).first()
-                if asignatura:
-                    asignaturas_list.append({
-                        "id": asignatura.id,
-                        "nombre": asignatura.nombre,
-                        "codigo": asignatura.codigo,
-                    })
+                if not asignatura:
+                    continue
+
+                num_estudiantes = 0
+                try:
+                    num_estudiantes = db.query(func.count(Estudiante.id)).filter(
+                        Estudiante.carrera_id == p.carrera_id,
+                        Estudiante.periodo_id == p.periodo_id,
+                        Estudiante.estado == True,
+                    ).scalar() or 0
+                except Exception:
+                    pass
+
+                asignaturas_list.append({
+                    "id": asignatura.id,
+                    "nombre": asignatura.nombre,
+                    "codigo": asignatura.codigo,
+                    "nivel": asignatura.nivel,
+                    "creditos": asignatura.creditos,
+                    "num_estudiantes": num_estudiantes,
+                })
 
             resultado.append({
                 "id": docente.id,
@@ -69,10 +89,13 @@ def listar_docentes():
                 "telefono": docente.telefono,
                 "especialidad": docente.especialidad,
                 "facultad_id": docente.facultad_id,
+                "facultad_nombre": facultades_cache.get(docente.facultad_id, ""),
                 "carga_horaria_maxima": docente.carga_horaria_maxima,
                 "estado": docente.estado,
                 "fecha_creacion": str(docente.fecha_creacion),
                 "asignaturas": asignaturas_list,
+                "total_asignaturas": len(asignaturas_list),
+                "total_estudiantes": sum(a["num_estudiantes"] for a in asignaturas_list),
             })
 
         return jsonify(resultado), 200
