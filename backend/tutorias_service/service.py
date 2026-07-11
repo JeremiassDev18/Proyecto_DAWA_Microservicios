@@ -1001,7 +1001,18 @@ class TutoriasService:
             inscripciones = db.query(InscripcionSesion).filter(
                 InscripcionSesion.sesion_id == int(sesion_id)
             ).all()
-            return [self._serializar_inscripcion(i) for i in inscripciones]
+            resultado = []
+            for i in inscripciones:
+                item = self._serializar_inscripcion(i)
+                if self.admin_client:
+                    try:
+                        estudiante = self.admin_client.obtener_estudiante(i.estudiante_id)
+                        if estudiante:
+                            item["estudiante_nombre"] = f"{estudiante.get('nombres', '')} {estudiante.get('apellidos', '')}".strip()
+                    except Exception:
+                        pass
+                resultado.append(item)
+            return resultado
         finally:
             db.close()
 

@@ -704,7 +704,7 @@ export default function TutoriasPage() {
                     color="success"
                   />
                 }
-                label={`Estudiante #${ins.estudiante_id}`}
+                label={ins.estudiante_nombre || `Estudiante #${ins.estudiante_id}`}
               />
             ))
           )}

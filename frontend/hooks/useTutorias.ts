@@ -60,7 +60,10 @@ export function useTutorias(estudianteId?: number, periodoId?: number, docenteId
   })
 
   const aceptarSolicitudMutation = useMutation({
-    mutationFn: (solicitudId: number) => tutoriasService.aceptarSolicitud(solicitudId),
+    mutationFn: (solicitudId: number) => {
+      if (!docenteId) throw new Error('No se encontró el ID del docente')
+      return tutoriasService.aceptarSolicitud(solicitudId, docenteId)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes-pendientes-docente'] })
       queryClient.invalidateQueries({ queryKey: ['sesiones-docente'] })
@@ -70,8 +73,10 @@ export function useTutorias(estudianteId?: number, periodoId?: number, docenteId
   })
 
   const rechazarSolicitudMutation = useMutation({
-    mutationFn: ({ solicitudId, motivo }: { solicitudId: number; motivo?: string }) =>
-      tutoriasService.rechazarSolicitud(solicitudId, motivo),
+    mutationFn: ({ solicitudId, motivo }: { solicitudId: number; motivo?: string }) => {
+      if (!docenteId) throw new Error('No se encontró el ID del docente')
+      return tutoriasService.rechazarSolicitud(solicitudId, docenteId, motivo)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes-pendientes-docente'] })
       showToast('Solicitud rechazada', 'info')
