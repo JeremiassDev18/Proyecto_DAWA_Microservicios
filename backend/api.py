@@ -399,6 +399,24 @@ def create_app(service: Any) -> Flask:
             logger.error(f"Error inscribiendo en sesión: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/tutorias/sesiones/<sesion_id>/inscrito/<estudiante_id>", methods=["GET"])
+    def verificar_inscripcion(sesion_id: str, estudiante_id: str):
+        try:
+            inscrito = service.esta_inscrito_en_sesion(sesion_id, estudiante_id)
+            return jsonify({"inscrito": inscrito}), 200
+        except Exception as e:
+            logger.error(f"Error verificando inscripción: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tutorias/estudiantes/<estudiante_id>/inscripciones", methods=["GET"])
+    def listar_inscripciones_estudiante(estudiante_id: str):
+        try:
+            inscripciones = service.listar_inscripciones_estudiante(estudiante_id)
+            return jsonify({"inscripciones": inscripciones}), 200
+        except Exception as e:
+            logger.error(f"Error listando inscripciones del estudiante: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/tutorias/sesiones/<sesion_id>/iniciar", methods=["PUT"])
     def iniciar_sesion(sesion_id: str):
         try:

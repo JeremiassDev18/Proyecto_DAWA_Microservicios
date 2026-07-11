@@ -42,6 +42,13 @@ export const tutoriasService = {
   inscribirseEnSesion: async (sesionId: number, estudianteId: number): Promise<any> => {
     return api.tutorias.post(`/sesiones/${sesionId}/inscribir`, { estudiante_id: estudianteId })
   },
+  verificarInscripcion: async (sesionId: number, estudianteId: number): Promise<{ inscrito: boolean }> => {
+    return api.tutorias.get(`/sesiones/${sesionId}/inscrito/${estudianteId}`)
+  },
+  listarInscripcionesEstudiante: async (estudianteId: number): Promise<any[]> => {
+    const data = await api.tutorias.get<any>(`/estudiantes/${estudianteId}/inscripciones`)
+    return data.inscripciones || []
+  },
   listarSesionesDocente: async (docenteId: number): Promise<SesionTutoria[]> => {
     const data = await api.tutorias.get<any>('/sesiones/docente', { params: { docente_id: docenteId } })
     return data.sesiones || []

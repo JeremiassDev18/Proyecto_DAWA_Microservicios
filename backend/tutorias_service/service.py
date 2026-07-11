@@ -1005,6 +1005,32 @@ class TutoriasService:
         finally:
             db.close()
 
+    def esta_inscrito_en_sesion(self, sesion_id: int | str, estudiante_id: int | str) -> bool:
+        """Verifica si un estudiante está inscrito en una sesión."""
+        db = self._get_db()
+        try:
+            inscripcion = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == int(sesion_id),
+                InscripcionSesion.estudiante_id == int(estudiante_id),
+            ).first()
+            return inscripcion is not None
+        finally:
+            db.close()
+
+    def listar_inscripciones_estudiante(
+        self,
+        estudiante_id: int | str,
+    ) -> List[Dict[str, Any]]:
+        """Lista todas las inscripciones de un estudiante."""
+        db = self._get_db()
+        try:
+            inscripciones = db.query(InscripcionSesion).filter(
+                InscripcionSesion.estudiante_id == int(estudiante_id)
+            ).all()
+            return [self._serializar_inscripcion(i) for i in inscripciones]
+        finally:
+            db.close()
+
     def listar_solicitudes_pendientes_docente(
         self,
         docente_id: int | str,

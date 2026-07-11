@@ -32,6 +32,13 @@ export function useTutorias(estudianteId?: number, periodoId?: number, docenteId
     enabled: !esModoProfesor,
   })
 
+  // --- Inscripciones del estudiante ---
+  const inscripcionesQuery = useQuery({
+    queryKey: ['inscripciones-estudiante', estudianteId],
+    queryFn: () => tutoriasService.listarInscripcionesEstudiante(estudianteId!),
+    enabled: !!estudianteId,
+  })
+
   const inscribirseMutation = useMutation({
     mutationFn: (sesionId: number) => {
       if (!estudianteId) throw new Error('No se encontró el ID del estudiante')
@@ -194,6 +201,10 @@ export function useTutorias(estudianteId?: number, periodoId?: number, docenteId
     isLoadingSesiones: sesionesAbiertasQuery.isLoading,
     inscribirseEnSesion: inscribirseMutation.mutate,
     isInscrebiendo: inscribirseMutation.isPending,
+
+    // Inscripciones del estudiante
+    inscripcionesEstudiante: inscripcionesQuery.data ?? [],
+    isLoadingInscripciones: inscripcionesQuery.isLoading,
 
     // Solicitudes pendientes (docente)
     solicitudesPendientes: solicitudesPendientesQuery.data ?? [],

@@ -148,7 +148,13 @@ VALUES
     ('admin@sistema.com',  '$argon2id$v=19$m=65536,t=3,p=4$jandSQ0pGTLCWyLQv2+WlA$KIPMWE8F5wSBEmjrMPHr6LQIFqDI2aBonEB+lof3m8Q', 'Admin Sistema'),
     ('admin@chatbot.com',  '$argon2id$v=19$m=65536,t=3,p=4$Ke0pZH4sXeH001KAYIKQsg$eKn7vjKBJ9fQ4MOCl4atsxrnGgk8VYAjOCPF/CELBvI', 'Admin Chatbot'),
     ('jeremias@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$PE2E+C8J7t0c6tk+UYuY2g$Hr0Tvr07HyBEae3m2oyHOkIT5F6LsG3hi4FzOhZ4RSk', 'Jeremías Prueba'),
-    ('profesor@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$ypCpKdHuhcrQBWm/28SW9A$yDB3KsJ7r8/RofDJiEHI3Q4MgoNipUcmpP1eHk9bI4E', 'Profesor Prueba')
+    ('profesor@test.com',  '$argon2id$v=19$m=65536,t=3,p=4$ypCpKdHuhcrQBWm/28SW9A$yDB3KsJ7r8/RofDJiEHI3Q4MgoNipUcmpP1eHk9bI4E', 'Profesor Prueba'),
+    -- Docentes (password: docente123)
+    ('carlos@test.com',                              '$argon2id$v=19$m=65536,t=3,p=4$i6TconmhewsFrceWDLYc+A$lzjHi6WidMrKV3J2cdd5JLwGqgRJaKahG9hrhSdQe58', 'Carlos Docente'),
+    ('carlos.mendoza@universidad.edu.ec',            '$argon2id$v=19$m=65536,t=3,p=4$i6TconmhewsFrceWDLYc+A$lzjHi6WidMrKV3J2cdd5JLwGqgRJaKahG9hrhSdQe58', 'Carlos Mendoza López'),
+    ('maria.gonzalez@universidad.edu.ec',            '$argon2id$v=19$m=65536,t=3,p=4$i6TconmhewsFrceWDLYc+A$lzjHi6WidMrKV3J2cdd5JLwGqgRJaKahG9hrhSdQe58', 'María González Ruiz'),
+    ('jose.martinez@universidad.edu.ec',             '$argon2id$v=19$m=65536,t=3,p=4$i6TconmhewsFrceWDLYc+A$lzjHi6WidMrKV3J2cdd5JLwGqgRJaKahG9hrhSdQe58', 'José Martínez Vera'),
+    ('ana.lopez@universidad.edu.ec',                 '$argon2id$v=19$m=65536,t=3,p=4$i6TconmhewsFrceWDLYc+A$lzjHi6WidMrKV3J2cdd5JLwGqgRJaKahG9hrhSdQe58', 'Ana López Torres')
 ON CONFLICT (email) DO NOTHING;
 
 -- Asignar roles a los usuarios semilla
@@ -181,4 +187,11 @@ ON CONFLICT DO NOTHING;
 INSERT INTO usuarios_roles (usuario_id, rol_id)
 SELECT u.id, r.id FROM usuarios u, roles r
 WHERE u.email = 'admin@chatbot.com' AND r.nombre_rol = 'profesor'
+ON CONFLICT DO NOTHING;
+
+-- Asignar rol profesor a todos los docentes
+INSERT INTO usuarios_roles (usuario_id, rol_id)
+SELECT u.id, r.id FROM usuarios u, roles r
+WHERE u.email IN ('carlos@test.com', 'carlos.mendoza@universidad.edu.ec', 'maria.gonzalez@universidad.edu.ec', 'jose.martinez@universidad.edu.ec', 'ana.lopez@universidad.edu.ec')
+AND r.nombre_rol = 'profesor'
 ON CONFLICT DO NOTHING;

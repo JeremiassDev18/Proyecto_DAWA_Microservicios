@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS solicitudes_tutoria (
     fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_agendada TIMESTAMP,
     fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    motivo_cancelacion TEXT
+    motivo_cancelacion TEXT,
+    motivo_rechazo TEXT,
+    sesion_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS bitacoras_atencion (
@@ -66,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_solicitudes_estudiante ON solicitudes_tutoria(est
 CREATE INDEX IF NOT EXISTS idx_solicitudes_docente ON solicitudes_tutoria(docente_id);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes_tutoria(estado);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_periodo ON solicitudes_tutoria(periodo_id);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_sesion ON solicitudes_tutoria(sesion_id);
 CREATE INDEX IF NOT EXISTS idx_bitacoras_solicitud ON bitacoras_atencion(solicitud_id);
 CREATE INDEX IF NOT EXISTS idx_historial_solicitud ON historial_estados(solicitud_id);
 CREATE TABLE IF NOT EXISTS casos_academicos (

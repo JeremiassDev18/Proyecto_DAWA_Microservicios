@@ -58,6 +58,7 @@ export default function TutoriasPage() {
 
   const {
     sesionesAbiertas, isLoadingSesiones, inscribirseEnSesion, isInscrebiendo,
+    inscripcionesEstudiante, isLoadingInscripciones,
     solicitudes, isLoading: isLoadingSolicitudes, isError: isErrorSolicitudes,
     crearSolicitud, isCreating,
     solicitudesPendientes, isLoadingPendientes,
@@ -107,6 +108,10 @@ export default function TutoriasPage() {
     s.tema?.toLowerCase().includes(busqueda.toLowerCase()) ||
     s.docente_nombre?.toLowerCase().includes(busqueda.toLowerCase())
   )
+
+  const estaInscrito = (sesionId: number): boolean => {
+    return inscripcionesEstudiante.some((i: any) => i.sesion_id === sesionId)
+  }
 
   const handleInscribirse = (sesionId: number) => inscribirseEnSesion(sesionId)
 
@@ -277,12 +282,13 @@ export default function TutoriasPage() {
                         </Box>
                         <Button
                           size="small"
-                          variant="contained"
-                          startIcon={<Add />}
+                          variant={estaInscrito(sesion.id) ? "outlined" : "contained"}
+                          color={estaInscrito(sesion.id) ? "success" : "primary"}
+                          startIcon={estaInscrito(sesion.id) ? <CheckCircle /> : <Add />}
                           onClick={() => handleInscribirse(sesion.id)}
-                          disabled={isInscrebiendo}
+                          disabled={isInscrebiendo || estaInscrito(sesion.id)}
                         >
-                          Inscribirme
+                          {estaInscrito(sesion.id) ? 'Inscrito' : 'Inscribirme'}
                         </Button>
                       </Stack>
                     </CardContent>
