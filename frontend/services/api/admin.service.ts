@@ -1,6 +1,14 @@
 import { api } from '@/services/api'
 import type { DashboardStats, Facultad, Carrera, Docente, Estudiante } from '@/types/admin.types'
 
+export interface Asignatura {
+  id: number
+  nombre: string
+  carrera_id?: number
+  periodo_id?: number
+  ciclo?: number
+}
+
 export const adminService = {
   getDashboardStats: async (): Promise<DashboardStats> => {
     return api.admin.get<DashboardStats>('/dashboard/')
@@ -102,5 +110,12 @@ export const adminService = {
   },
   deleteEstudiante: async (id: number): Promise<void> => {
     await api.admin.delete(`/estudiantes/${id}`)
+  },
+
+  getAsignaturas: async (): Promise<Asignatura[]> => {
+    const data = await api.admin.get<any>('/asignaturas/')
+    const items = data.asignaturas || data
+    if (!Array.isArray(items)) return []
+    return items
   },
 }

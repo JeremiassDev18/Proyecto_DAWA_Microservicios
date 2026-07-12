@@ -150,6 +150,16 @@ class AdministracionClient:
             logger.error(f"Error de conexión obteniendo periodo {periodo_id}: {e}")
             return {}
 
+    def listar_asignaturas(self) -> list:
+        try:
+            data = self._get("/asignaturas/")
+            if isinstance(data, list):
+                return data
+            return data.get("asignaturas", [])
+        except Exception as e:
+            logger.error(f"Error listando asignaturas: {e}")
+            return []
+
     def validar_periodo_activo(self, periodo_id: int | str) -> Dict[str, Any]:
         periodo = self.obtener_periodo(periodo_id)
         if not periodo:

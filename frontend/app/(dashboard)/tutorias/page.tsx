@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useTutorias } from '@/hooks/useTutorias'
 import { useAuth } from '@/hooks/useAuth'
 import { useDocentes } from '@/hooks/useDocentes'
+import { useAsignaturas } from '@/hooks/useAsignaturas'
 import { tutoriasService } from '@/services/api/tutorias.service'
 import { useToast } from '@/hooks/useToast'
 
@@ -101,6 +102,7 @@ export default function TutoriasPage() {
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<number | null>(null)
 
   const { docentes: docentesList, isLoading: isLoadingDocentes } = useDocentes()
+  const { asignaturas: asignaturasList, isLoading: isLoadingAsignaturas } = useAsignaturas()
 
   const sesionesFiltradas = sesionesAbiertas.filter((s: any) =>
     !busqueda ||
@@ -514,8 +516,8 @@ export default function TutoriasPage() {
               <DataTable
                 rows={adminSolicitudes}
                 columns={[
-                  { id: 'estudiante_id', label: 'Estudiante', render: (row: any) => `Est. #${row.estudiante_id}` },
-                  { id: 'asignatura_id', label: 'Asignatura', render: (row: any) => row.asignatura_id ? `Asig. #${row.asignatura_id}` : '—' },
+                  { id: 'estudiante_id', label: 'Estudiante', render: (row: any) => row.estudiante_nombre || `Est. #${row.estudiante_id}` },
+                  { id: 'materia_nombre', label: 'Asignatura', render: (row: any) => row.materia_nombre || '—' },
                   { id: 'tema', label: 'Tema' },
                   { id: 'estado', label: 'Estado', render: (row: any) => <StatusBadge status={row.estado} /> },
                   { id: 'fecha_solicitud', label: 'Fecha solicitud' },
@@ -565,13 +567,23 @@ export default function TutoriasPage() {
               fullWidth multiline minRows={2} required
               helperText="Describe el tema o duda que tienes"
             />
-            <TextField
-              label="Asignatura ID (opcional)"
-              type="number"
-              value={createForm.asignatura_id}
-              onChange={(e) => setCreateForm({ ...createForm, asignatura_id: e.target.value })}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel>Materia (opcional)</InputLabel>
+              <Select
+                value={createForm.asignatura_id}
+                label="Materia (opcional)"
+                onChange={(e) => setCreateForm({ ...createForm, asignatura_id: e.target.value })}
+              >
+                <MenuItem value="">Ninguna</MenuItem>
+                {isLoadingAsignaturas ? (
+                  <MenuItem disabled>Cargando materias...</MenuItem>
+                ) : (
+                  asignaturasList.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>{a.nombre}</MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             <TextField
               label="Fecha preferida (opcional)"
               type="date"
@@ -622,13 +634,23 @@ export default function TutoriasPage() {
               fullWidth required
               helperText="Tema de la sesión de tutoría"
             />
-            <TextField
-              label="ID de asignatura (opcional)"
-              type="number"
-              value={adminForm.asignatura_id}
-              onChange={(e) => setAdminForm({ ...adminForm, asignatura_id: e.target.value })}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel>Materia (opcional)</InputLabel>
+              <Select
+                value={adminForm.asignatura_id}
+                label="Materia (opcional)"
+                onChange={(e) => setAdminForm({ ...adminForm, asignatura_id: e.target.value })}
+              >
+                <MenuItem value="">Ninguna</MenuItem>
+                {isLoadingAsignaturas ? (
+                  <MenuItem disabled>Cargando materias...</MenuItem>
+                ) : (
+                  asignaturasList.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>{a.nombre}</MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             <TextField
               label="Descripción (opcional)"
               value={adminForm.descripcion}
