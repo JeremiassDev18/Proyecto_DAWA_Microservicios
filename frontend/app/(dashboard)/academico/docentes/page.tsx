@@ -17,8 +17,8 @@ export default function DocentesPage() {
 
   return (
     <CrudPageTemplate<Docente>
-      title="Docentes"
-      subtitle="Registro y gestión del personal académico"
+      title="Maestros"
+      subtitle="Registro y gestión del personal académico — con IDs para referencia"
       items={hook.docentes}
       isLoading={hook.isLoading}
       isError={hook.isError}
@@ -30,6 +30,7 @@ export default function DocentesPage() {
       onUpdate={hook.updateDocente}
       onDelete={hook.deleteDocente}
       columns={[
+        { id: 'id', label: 'ID', render: (row) => <Chip label={row.id} size="small" color="primary" variant="outlined" /> },
         { id: 'nombres', label: 'Nombres' },
         { id: 'apellidos', label: 'Apellidos' },
         { id: 'email', label: 'Correo' },
@@ -74,9 +75,9 @@ export default function DocentesPage() {
       ]}
       formFields={formFields}
       searchFields={['nombres', 'apellidos', 'email']}
-      searchPlaceholder="Buscar docente"
-      entityName="docente"
-      createLabel="Nuevo docente"
+      searchPlaceholder="Buscar maestro por nombre o correo"
+      entityName="maestro"
+      createLabel="Nuevo maestro"
       statusField="activo"
       getInitialForm={() => ({ nombres: '', apellidos: '', email: '', activo: true })}
     />

@@ -42,6 +42,13 @@ export const tutoriasService = {
   inscribirseEnSesion: async (sesionId: number, estudianteId: number): Promise<any> => {
     return api.tutorias.post(`/sesiones/${sesionId}/inscribir`, { estudiante_id: estudianteId })
   },
+  verificarInscripcion: async (sesionId: number, estudianteId: number): Promise<{ inscrito: boolean }> => {
+    return api.tutorias.get(`/sesiones/${sesionId}/inscrito/${estudianteId}`)
+  },
+  listarInscripcionesEstudiante: async (estudianteId: number): Promise<any[]> => {
+    const data = await api.tutorias.get<any>(`/estudiantes/${estudianteId}/inscripciones`)
+    return data.inscripciones || []
+  },
   listarSesionesDocente: async (docenteId: number): Promise<SesionTutoria[]> => {
     const data = await api.tutorias.get<any>('/sesiones/docente', { params: { docente_id: docenteId } })
     return data.sesiones || []
@@ -50,17 +57,17 @@ export const tutoriasService = {
     const data = await api.tutorias.get<any>('/sesiones/solicitudes-pendientes', { params: { docente_id: docenteId } })
     return data.solicitudes || []
   },
-  aceptarSolicitud: async (solicitudId: number, usuarioId?: number): Promise<SesionTutoria> => {
-    return api.tutorias.put<SesionTutoria>(`/sesiones/aceptar/${solicitudId}`, { usuario_id: usuarioId })
+  aceptarSolicitud: async (solicitudId: number, docenteId: number): Promise<SesionTutoria> => {
+    return api.tutorias.put<SesionTutoria>(`/sesiones/aceptar/${solicitudId}`, { docente_id: docenteId })
   },
-  rechazarSolicitud: async (solicitudId: number, motivo?: string, usuarioId?: number): Promise<any> => {
-    return api.tutorias.put(`/sesiones/rechazar/${solicitudId}`, { motivo, usuario_id: usuarioId })
+  rechazarSolicitud: async (solicitudId: number, docenteId: number, motivo?: string): Promise<any> => {
+    return api.tutorias.put(`/sesiones/rechazar/${solicitudId}`, { docente_id: docenteId, motivo })
   },
   iniciarSesion: async (sesionId: number): Promise<SesionTutoria> => {
-    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/iniciar`)
+    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/iniciar`, {})
   },
   finalizarSesion: async (sesionId: number): Promise<SesionTutoria> => {
-    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/finalizar`)
+    return api.tutorias.put<SesionTutoria>(`/sesiones/${sesionId}/finalizar`, {})
   },
 
   // --- Notificaciones ---

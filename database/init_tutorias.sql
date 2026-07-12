@@ -9,7 +9,42 @@ CREATE TABLE IF NOT EXISTS solicitudes_tutoria (
     fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_agendada TIMESTAMP,
     fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    motivo_cancelacion TEXT
+    motivo_cancelacion TEXT,
+    motivo_rechazo TEXT,
+    sesion_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sesiones_tutoria (
+    id SERIAL PRIMARY KEY,
+    solicitud_id INTEGER NOT NULL,
+    docente_id INTEGER NOT NULL,
+    asignatura_id INTEGER,
+    tema VARCHAR(200) NOT NULL,
+    descripcion TEXT,
+    estado VARCHAR(30) NOT NULL DEFAULT 'abierta',
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_agendada TIMESTAMP,
+    fecha_inicio TIMESTAMP,
+    fecha_fin TIMESTAMP,
+    capacidad_maxima INTEGER NOT NULL DEFAULT 20,
+    total_inscritos INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT fk_sesion_solicitud
+        FOREIGN KEY (solicitud_id)
+        REFERENCES solicitudes_tutoria(id)
+);
+
+CREATE TABLE IF NOT EXISTS inscripciones_sesion (
+    id SERIAL PRIMARY KEY,
+    sesion_id INTEGER NOT NULL,
+    estudiante_id INTEGER NOT NULL,
+    fecha_inscripcion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    asistio BOOLEAN,
+    observaciones TEXT,
+    CONSTRAINT fk_inscripcion_sesion
+        FOREIGN KEY (sesion_id)
+        REFERENCES sesiones_tutoria(id),
+    CONSTRAINT uq_inscripcion_sesion_estudiante
+        UNIQUE (sesion_id, estudiante_id)
 );
 
 CREATE TABLE IF NOT EXISTS bitacoras_atencion (
@@ -66,6 +101,12 @@ CREATE INDEX IF NOT EXISTS idx_solicitudes_estudiante ON solicitudes_tutoria(est
 CREATE INDEX IF NOT EXISTS idx_solicitudes_docente ON solicitudes_tutoria(docente_id);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes_tutoria(estado);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_periodo ON solicitudes_tutoria(periodo_id);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_sesion ON solicitudes_tutoria(sesion_id);
+CREATE INDEX IF NOT EXISTS idx_sesiones_docente ON sesiones_tutoria(docente_id);
+CREATE INDEX IF NOT EXISTS idx_sesiones_estado ON sesiones_tutoria(estado);
+CREATE INDEX IF NOT EXISTS idx_sesiones_solicitud ON sesiones_tutoria(solicitud_id);
+CREATE INDEX IF NOT EXISTS idx_inscripciones_sesion ON inscripciones_sesion(sesion_id);
+CREATE INDEX IF NOT EXISTS idx_inscripciones_estudiante ON inscripciones_sesion(estudiante_id);
 CREATE INDEX IF NOT EXISTS idx_bitacoras_solicitud ON bitacoras_atencion(solicitud_id);
 CREATE INDEX IF NOT EXISTS idx_historial_solicitud ON historial_estados(solicitud_id);
 CREATE TABLE IF NOT EXISTS casos_academicos (

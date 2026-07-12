@@ -12,7 +12,7 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "seguridaddb")
     DB_USER = os.getenv("DB_USER", "seguridad_user")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "changeme")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change_this_secret")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "1a6790ea7aee933b903e74fcaa2804dfbf61387d6c4d7cb61206fd32b211958b")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "900"))
     JWT_REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "86400"))

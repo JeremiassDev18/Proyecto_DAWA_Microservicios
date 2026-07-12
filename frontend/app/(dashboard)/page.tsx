@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Box, Grid, Typography, useTheme, Card, CardContent, Stack, Chip, Avatar } from '@mui/material'
+import { Box, Grid, Typography, useTheme, Card, CardContent, Stack, Chip, Avatar, Divider } from '@mui/material'
 import {
   School, Book, Group, Person,
   CalendarMonth, TrendingUp, Chat, Help, Assignment,
@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useStudent } from '@/hooks/useStudent'
+import { useDocenteProfile } from '@/hooks/useDocenteProfile'
 import { StatCard } from '@/components/ui/StatCard'
 import { ChartCard } from '@/components/ui/ChartCard'
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton'
@@ -23,7 +24,9 @@ export default function DashboardPage() {
   const { user, docenteId } = useAuth()
   const { data: stats, isLoading, isError, refetch } = useDashboard()
   const { estudiante, carrera, materias, tutoriasCount } = useStudent()
+  const { docente: docenteProfile } = useDocenteProfile(docenteId)
   const [tutoriasDocente, setTutoriasDocente] = useState<number>(0)
+  const [sesionesDocente, setSesionesDocente] = useState<any[]>([])
   const theme = useTheme()
   const router = useRouter()
 
@@ -37,6 +40,9 @@ export default function DashboardPage() {
     if (isTeacher && docenteId) {
       tutoriasService.listarTutoriasPorDocente(docenteId).then((r) => {
         setTutoriasDocente(r.cantidad ?? 0)
+      }).catch(() => {})
+      tutoriasService.listarSesionesDocente(docenteId).then((r) => {
+        setSesionesDocente(Array.isArray(r) ? r : [])
       }).catch(() => {})
     }
   }, [isTeacher, docenteId])
@@ -133,34 +139,92 @@ export default function DashboardPage() {
       {/* ── PROFESOR ── */}
       {isTeacher && (
         <>
-          <Card variant="outlined" sx={{ mb: 3, borderRadius: 3, bgcolor: 'secondary.main', color: 'white' }}>
-            <CardContent sx={{ py: 3 }}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                <School sx={{ fontSize: 40, opacity: 0.8 }} />
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Panel de Docente</Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    {docenteId
-                      ? `Bienvenido, ${user?.nombre || 'Docente'}. Tienes ${tutoriasDocente} tutorías asignadas.`
-                      : 'Revisa las tutorías asignadas en la sección de Tutorías.'}
+          <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
+            <CardContent>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'center' }}>
+                <Avatar sx={{ width: 72, height: 72, bgcolor: 'secondary.main', fontSize: '1.8rem' }}>
+                  {docenteProfile?.nombres?.[0]?.toUpperCase() || user?.nombre?.[0]?.toUpperCase() || 'D'}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {docenteProfile ? `${docenteProfile.nombres} ${docenteProfile.apellidos}` : user?.nombre || 'Docente'}
                   </Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+                    {docenteProfile?.especialidad && (
+                      <Chip label={`Especialidad: ${docenteProfile.especialidad}`} size="small" variant="outlined" />
+                    )}
+                    {docenteProfile?.facultad_nombre && (
+                      <Chip label={`Facultad: ${docenteProfile.facultad_nombre}`} size="small" color="primary" variant="outlined" />
+                    )}
+                    <Chip label={`${tutoriasDocente} tutorías asignadas`} size="small" color="info" variant="outlined" />
+                  </Stack>
                 </Box>
               </Stack>
             </CardContent>
           </Card>
 
-          {docenteId && (
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <StatCard title="Tutorías Asignadas" value={tutoriasDocente} icon={Assignment} color={theme.palette.primary.main} onClick={() => router.push(ROUTES.TUTORIAS)} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <StatCard title="Chat IA" value="Activo" icon={Chat} color={theme.palette.success.main} onClick={() => router.push(ROUTES.CHAT)} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <StatCard title="Bitácora" value="Ver registros" icon={Book} color={theme.palette.warning.main} />
-              </Grid>
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Tutorías Asignadas" value={tutoriasDocente} icon={Assignment} color={theme.palette.primary.main} onClick={() => router.push(ROUTES.TUTORIAS)} />
             </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Materias" value={docenteProfile?.total_asignaturas ?? 0} icon={AutoStories} color={theme.palette.info.main} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Sesiones activas" value={sesionesDocente.filter((s: any) => s.estado === 'abierta' || s.estado === 'en_curso').length} icon={Group} color={theme.palette.success.main} onClick={() => router.push(ROUTES.TUTORIAS)} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard title="Chat IA" value="Activo" icon={Chat} color={theme.palette.success.main} onClick={() => router.push(ROUTES.CHAT)} />
+            </Grid>
+          </Grid>
+
+          {/* Materias asignadas */}
+          {docenteProfile?.asignaturas && docenteProfile.asignaturas.length > 0 && (
+            <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Mis materias</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                  {docenteProfile.asignaturas.map((a: any) => (
+                    <Chip
+                      key={a.id}
+                      label={`${a.nombre}${a.num_estudiantes ? ` — ${a.num_estudiantes} estudiantes` : ''}`}
+                      color="primary"
+                      variant="outlined"
+                      size="small"
+                    />
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Últimas sesiones */}
+          {sesionesDocente.length > 0 && (
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Últimas sesiones</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <Stack spacing={1}>
+                  {sesionesDocente.slice(0, 5).map((s: any) => (
+                    <Stack key={s.id} direction="row" spacing={2} sx={{ alignItems: 'center', py: 0.5 }}>
+                      <Chip
+                        label={s.estado}
+                        size="small"
+                        color={s.estado === 'abierta' || s.estado === 'en_curso' ? 'success' : s.estado === 'atendida' ? 'info' : 'default'}
+                        variant="outlined"
+                      />
+                      <Typography variant="body2" sx={{ flex: 1, fontWeight: 500 }}>
+                        {s.materia_nombre || 'Sin materia'} — {s.tema || 'Sin tema'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {s.inscritos_count || 0} inscritos
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
           )}
         </>
       )}

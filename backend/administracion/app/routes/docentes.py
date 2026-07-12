@@ -2,7 +2,7 @@ from sqlalchemy import func
 
 from flask import Blueprint, request, jsonify
 from app.database import SessionLocal
-from app.models import Asignatura, Docente, Facultad, Paralelo
+from app.models import Asignatura, Docente, Estudiante, Facultad, Paralelo
 from app.auth import requiere_roles
 from app.audit import registrar_auditoria
 

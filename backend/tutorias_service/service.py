@@ -39,12 +39,71 @@ class TutoriasService:
             raise RuntimeError("db_session_factory no configurado")
         return self.db_session_factory()
 
-    def _serializar_solicitud(self, s: SolicitudTutoria) -> Dict[str, Any]:
+    # ── batch cache helpers ─────────────────────────────────────
+
+    def _build_caches(self, solicitudes: list, sesiones: list | None = None) -> Dict[str, Dict]:
+        """Fetch docentes, estudiantes, and asignaturas once for all rows."""
+        cache: Dict[str, Dict] = {"docentes": {}, "estudiantes": {}, "asignaturas": {}}
+        if not self.admin_client:
+            return cache
+
+        # Collect unique IDs
+        est_ids = set()
+        doc_ids = set()
+        asig_ids = set()
+        for s in solicitudes:
+            est_ids.add(s.estudiante_id)
+            if s.docente_id:
+                doc_ids.add(s.docente_id)
+            if s.asignatura_id:
+                asig_ids.add(s.asignatura_id)
+        if sesiones:
+            for s in sesiones:
+                if s.docente_id:
+                    doc_ids.add(s.docente_id)
+                if s.asignatura_id:
+                    asig_ids.add(s.asignatura_id)
+
+        # Batch fetch estudiantes
+        for eid in est_ids:
+            try:
+                est = self.admin_client.obtener_estudiante(eid)
+                if est:
+                    cache["estudiantes"][eid] = f"{est.get('nombres', '')} {est.get('apellidos', '')}".strip()
+            except Exception:
+                pass
+
+        # Batch fetch docentes
+        for did in doc_ids:
+            try:
+                doc = self.admin_client.obtener_docente(did)
+                if doc:
+                    cache["docentes"][did] = f"{doc.get('nombres', '')} {doc.get('apellidos', '')}".strip()
+            except Exception:
+                pass
+
+        # Batch fetch asignaturas (single call)
+        if asig_ids:
+            try:
+                all_asig = self.admin_client.listar_asignaturas()
+                for a in all_asig:
+                    if a.get("id") in asig_ids:
+                        cache["asignaturas"][a["id"]] = a.get("nombre")
+            except Exception:
+                pass
+
+        return cache
+
+    def _serializar_solicitud(self, s: SolicitudTutoria, cache: Dict[str, Dict] | None = None) -> Dict[str, Any]:
         fs = s.fecha_solicitud
         fa = s.fecha_agendada
         estudiante_nombre = None
         materia_nombre = None
-        if self.admin_client:
+        if cache:
+            estudiante_nombre = cache.get("estudiantes", {}).get(s.estudiante_id)
+            if s.asignatura_id:
+                materia_nombre = cache.get("asignaturas", {}).get(s.asignatura_id)
+        elif self.admin_client:
             try:
                 estudiante = self.admin_client.obtener_estudiante(s.estudiante_id)
                 if estudiante:
@@ -456,11 +515,12 @@ class TutoriasService:
             if periodo_id:
                 query = query.filter(SolicitudTutoria.periodo_id == int(periodo_id))
             tutorias = query.all()
+            cache = self._build_caches(tutorias)
             return {
                 "docente_id": int(docente_id),
                 "periodo_id": int(periodo_id) if periodo_id else None,
                 "cantidad": len(tutorias),
-                "tutorias": [self._serializar_solicitud(s) for s in tutorias],
+                "tutorias": [self._serializar_solicitud(s, cache) for s in tutorias],
             }
         finally:
             db.close()
@@ -587,7 +647,9 @@ class TutoriasService:
             )
             if periodo_id:
                 query = query.filter(SolicitudTutoria.periodo_id == int(periodo_id))
-            return [self._serializar_solicitud(s) for s in query.all()]
+            rows = query.all()
+            cache = self._build_caches(rows)
+            return [self._serializar_solicitud(s, cache) for s in rows]
         finally:
             db.close()
 
@@ -601,7 +663,9 @@ class TutoriasService:
             query = db.query(SolicitudTutoria)
             if periodo_id:
                 query = query.filter(SolicitudTutoria.periodo_id == int(periodo_id))
-            return [self._serializar_solicitud(s) for s in query.all()]
+            rows = query.all()
+            cache = self._build_caches(rows)
+            return [self._serializar_solicitud(s, cache) for s in rows]
         finally:
             db.close()
 
@@ -667,13 +731,17 @@ class TutoriasService:
 
     # ── Métodos de sesiones grupales ─────────────────────────────
 
-    def _serializar_sesion(self, s: SesionTutoria) -> Dict[str, Any]:
+    def _serializar_sesion(self, s: SesionTutoria, cache: Dict[str, Dict] | None = None) -> Dict[str, Any]:
         fa = s.fecha_agendada
         fi = s.fecha_inicio
         ff = s.fecha_fin
         docente_nombre = None
         materia_nombre = None
-        if self.admin_client:
+        if cache:
+            docente_nombre = cache.get("docentes", {}).get(s.docente_id)
+            if s.asignatura_id:
+                materia_nombre = cache.get("asignaturas", {}).get(s.asignatura_id)
+        elif self.admin_client:
             try:
                 docente = self.admin_client.obtener_docente(s.docente_id)
                 if docente:
@@ -965,15 +1033,16 @@ class TutoriasService:
                 query = query.filter(SesionTutoria.asignatura_id == int(asignatura_id))
             elif materia_nombre and self.admin_client:
                 try:
-                    asignaturas = self.admin_client._get(f"/asignaturas/")
-                    if isinstance(asignaturas, list):
-                        ids = [a.get("id") for a in asignaturas if materia_nombre.lower() in (a.get("nombre") or "").lower()]
+                    all_asig = self.admin_client.listar_asignaturas()
+                    if isinstance(all_asig, list):
+                        ids = [a.get("id") for a in all_asig if materia_nombre.lower() in (a.get("nombre") or "").lower()]
                         if ids:
                             query = query.filter(SesionTutoria.asignatura_id.in_(ids))
                 except Exception:
                     pass
             sesiones = query.all()
-            return [self._serializar_sesion(s) for s in sesiones]
+            cache = self._build_caches([], sesiones)
+            return [self._serializar_sesion(s, cache) for s in sesiones]
         finally:
             db.close()
 
@@ -987,7 +1056,8 @@ class TutoriasService:
             sesiones = db.query(SesionTutoria).filter(
                 SesionTutoria.docente_id == int(docente_id)
             ).all()
-            return [self._serializar_sesion(s) for s in sesiones]
+            cache = self._build_caches([], sesiones)
+            return [self._serializar_sesion(s, cache) for s in sesiones]
         finally:
             db.close()
 
@@ -1000,6 +1070,48 @@ class TutoriasService:
         try:
             inscripciones = db.query(InscripcionSesion).filter(
                 InscripcionSesion.sesion_id == int(sesion_id)
+            ).all()
+            resultado = []
+            # Batch fetch student names
+            est_names: Dict[int, str] = {}
+            if self.admin_client:
+                for i in inscripciones:
+                    try:
+                        est = self.admin_client.obtener_estudiante(i.estudiante_id)
+                        if est:
+                            est_names[i.estudiante_id] = f"{est.get('nombres', '')} {est.get('apellidos', '')}".strip()
+                    except Exception:
+                        pass
+            for i in inscripciones:
+                item = self._serializar_inscripcion(i)
+                if i.estudiante_id in est_names:
+                    item["estudiante_nombre"] = est_names[i.estudiante_id]
+                resultado.append(item)
+            return resultado
+        finally:
+            db.close()
+
+    def esta_inscrito_en_sesion(self, sesion_id: int | str, estudiante_id: int | str) -> bool:
+        """Verifica si un estudiante está inscrito en una sesión."""
+        db = self._get_db()
+        try:
+            inscripcion = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == int(sesion_id),
+                InscripcionSesion.estudiante_id == int(estudiante_id),
+            ).first()
+            return inscripcion is not None
+        finally:
+            db.close()
+
+    def listar_inscripciones_estudiante(
+        self,
+        estudiante_id: int | str,
+    ) -> List[Dict[str, Any]]:
+        """Lista todas las inscripciones de un estudiante."""
+        db = self._get_db()
+        try:
+            inscripciones = db.query(InscripcionSesion).filter(
+                InscripcionSesion.estudiante_id == int(estudiante_id)
             ).all()
             return [self._serializar_inscripcion(i) for i in inscripciones]
         finally:
@@ -1016,7 +1128,8 @@ class TutoriasService:
                 SolicitudTutoria.docente_id == int(docente_id),
                 SolicitudTutoria.estado.in_(["solicitada", "asignada"]),
             ).all()
-            return [self._serializar_solicitud(s) for s in solicitudes]
+            cache = self._build_caches(solicitudes)
+            return [self._serializar_solicitud(s, cache) for s in solicitudes]
         finally:
             db.close()
 

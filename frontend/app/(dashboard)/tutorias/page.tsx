@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Box, Button, Stack, TextField, Chip, Card, CardContent, Typography, Tabs, Tab, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch } from '@mui/material'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Box, Button, Stack, TextField, Chip, Card, CardContent, Typography, Tabs, Tab, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItemButton, ListItemText } from '@mui/material'
 import { Add, CheckCircle, Cancel, School, Group, PlayArrow, Stop, PersonSearch, Search, EditNote, HowToReg } from '@mui/icons-material'
 import { PageContainer } from '@/components/ui/PageContainer'
 import { DataTable } from '@/components/ui/DataTable'
@@ -11,7 +12,10 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useTutorias } from '@/hooks/useTutorias'
 import { useAuth } from '@/hooks/useAuth'
+import { useDocentes } from '@/hooks/useDocentes'
+import { useAsignaturas } from '@/hooks/useAsignaturas'
 import { tutoriasService } from '@/services/api/tutorias.service'
+import { useToast } from '@/hooks/useToast'
 
 const estadoColor = (e: string) => {
   if (e === 'abierta' || e === 'en_curso') return 'success'
@@ -25,7 +29,9 @@ export default function TutoriasPage() {
   const { user, estudianteId, docenteId } = useAuth()
   const isAdmin = user?.roles?.includes('admin')
   const isStudent = user?.roles?.includes('estudiante')
-  const isTeacher = user?.roles?.includes('docente')
+  const isTeacher = user?.roles?.includes('profesor') || user?.roles?.includes('docente')
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
 
   const [tab, setTab] = useState(0)
   const [busqueda, setBusqueda] = useState('')
@@ -53,6 +59,7 @@ export default function TutoriasPage() {
 
   const {
     sesionesAbiertas, isLoadingSesiones, inscribirseEnSesion, isInscrebiendo,
+    inscripcionesEstudiante, isLoadingInscripciones,
     solicitudes, isLoading: isLoadingSolicitudes, isError: isErrorSolicitudes,
     crearSolicitud, isCreating,
     solicitudesPendientes, isLoadingPendientes,
@@ -71,12 +78,42 @@ export default function TutoriasPage() {
     isTeacher ? (docenteId ?? undefined) : undefined,
   )
 
+  // Admin also needs all solicitudes
+  const { data: adminSolicitudes = [], isLoading: isLoadingAdminSolicitudes } = useQuery({
+    queryKey: ['solicitudes', 'admin'],
+    queryFn: () => tutoriasService.listarSolicitudes(),
+    enabled: isAdmin,
+  })
+
+  const asignarDocenteMutation = useMutation({
+    mutationFn: ({ solicitudId, docenteId }: { solicitudId: number; docenteId: number }) =>
+      tutoriasService.asignarTutoria(solicitudId, docenteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['sesiones-abiertas'] })
+      showToast('Docente asignado correctamente', 'success')
+      setAsignarModalOpen(false)
+      setSolicitudSeleccionada(null)
+    },
+    onError: (e: any) => showToast(e?.message || 'No se pudo asignar el docente', 'error'),
+  })
+
+  const [asignarModalOpen, setAsignarModalOpen] = useState(false)
+  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<number | null>(null)
+
+  const { docentes: docentesList, isLoading: isLoadingDocentes } = useDocentes()
+  const { asignaturas: asignaturasList, isLoading: isLoadingAsignaturas } = useAsignaturas()
+
   const sesionesFiltradas = sesionesAbiertas.filter((s: any) =>
     !busqueda ||
     s.materia_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
     s.tema?.toLowerCase().includes(busqueda.toLowerCase()) ||
     s.docente_nombre?.toLowerCase().includes(busqueda.toLowerCase())
   )
+
+  const estaInscrito = (sesionId: number): boolean => {
+    return inscripcionesEstudiante.some((i: any) => i.sesion_id === sesionId)
+  }
 
   const handleInscribirse = (sesionId: number) => inscribirseEnSesion(sesionId)
 
@@ -185,6 +222,7 @@ export default function TutoriasPage() {
           {isTeacher && <Tab label="Solicitudes pendientes" icon={<PersonSearch />} />}
           {isTeacher && <Tab label="Mis sesiones" icon={<PlayArrow />} />}
           {isAdmin && <Tab label="Todas las sesiones" icon={<Group />} />}
+          {isAdmin && <Tab label="Solicitudes pendientes" icon={<PersonSearch />} />}
         </Tabs>
 
         {/* ===== ESTUDIANTE: Sesiones abiertas ===== */}
@@ -246,12 +284,13 @@ export default function TutoriasPage() {
                         </Box>
                         <Button
                           size="small"
-                          variant="contained"
-                          startIcon={<Add />}
+                          variant={estaInscrito(sesion.id) ? "outlined" : "contained"}
+                          color={estaInscrito(sesion.id) ? "success" : "primary"}
+                          startIcon={estaInscrito(sesion.id) ? <CheckCircle /> : <Add />}
                           onClick={() => handleInscribirse(sesion.id)}
-                          disabled={isInscrebiendo}
+                          disabled={isInscrebiendo || estaInscrito(sesion.id)}
                         >
-                          Inscribirme
+                          {estaInscrito(sesion.id) ? 'Inscrito' : 'Inscribirme'}
                         </Button>
                       </Stack>
                     </CardContent>
@@ -451,6 +490,63 @@ export default function TutoriasPage() {
             )}
           </Box>
         )}
+
+        {/* ===== ADMIN: Solicitudes pendientes ===== */}
+        {isAdmin && tab === 1 && (
+          <Box>
+            <Card variant="outlined" sx={{ mb: 3, borderRadius: 2, bgcolor: '#fff3e0' }}>
+              <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                  <PersonSearch sx={{ fontSize: 28, color: 'warning.main' }} />
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Solicitudes pendientes de tutoría</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Asigna un docente a las solicitudes de tutoría creadas por los estudiantes.
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {isLoadingAdminSolicitudes ? (
+              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>Cargando solicitudes...</Typography>
+            ) : adminSolicitudes.length === 0 ? (
+              <ErrorState title="Sin solicitudes" message="No hay solicitudes de tutoría pendientes." />
+            ) : (
+              <DataTable
+                rows={adminSolicitudes}
+                columns={[
+                  { id: 'estudiante_id', label: 'Estudiante', render: (row: any) => row.estudiante_nombre || `Est. #${row.estudiante_id}` },
+                  { id: 'materia_nombre', label: 'Asignatura', render: (row: any) => row.materia_nombre || '—' },
+                  { id: 'tema', label: 'Tema' },
+                  { id: 'estado', label: 'Estado', render: (row: any) => <StatusBadge status={row.estado} /> },
+                  { id: 'fecha_solicitud', label: 'Fecha solicitud' },
+                  { id: 'fecha_agendada', label: 'Fecha preferida', render: (row: any) => row.fecha_agendada || '—' },
+                ]}
+                actions={(row: any) => (
+                  <Stack direction="row" spacing={1}>
+                    {row.estado === 'solicitada' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="primary"
+                        startIcon={<PersonSearch />}
+                        onClick={() => {
+                          setSolicitudSeleccionada(row.id)
+                          setAsignarModalOpen(true)
+                        }}
+                      >
+                        Asignar docente
+                      </Button>
+                    )}
+                  </Stack>
+                )}
+                emptyTitle="Sin solicitudes"
+                emptyMessage="No hay solicitudes de tutoría pendientes."
+              />
+            )}
+          </Box>
+        )}
       </PageContainer>
 
       {/* Modal: Crear solicitud (estudiante) */}
@@ -471,13 +567,23 @@ export default function TutoriasPage() {
               fullWidth multiline minRows={2} required
               helperText="Describe el tema o duda que tienes"
             />
-            <TextField
-              label="Asignatura ID (opcional)"
-              type="number"
-              value={createForm.asignatura_id}
-              onChange={(e) => setCreateForm({ ...createForm, asignatura_id: e.target.value })}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel>Materia (opcional)</InputLabel>
+              <Select
+                value={createForm.asignatura_id}
+                label="Materia (opcional)"
+                onChange={(e) => setCreateForm({ ...createForm, asignatura_id: e.target.value })}
+              >
+                <MenuItem value="">Ninguna</MenuItem>
+                {isLoadingAsignaturas ? (
+                  <MenuItem disabled>Cargando materias...</MenuItem>
+                ) : (
+                  asignaturasList.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>{a.nombre}</MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             <TextField
               label="Fecha preferida (opcional)"
               type="date"
@@ -501,14 +607,26 @@ export default function TutoriasPage() {
           submitLabel="Crear sesión"
         >
           <Stack spacing={2} sx={{ py: 1 }}>
-            <TextField
-              label="ID del docente"
-              type="number"
-              value={adminForm.docente_id}
-              onChange={(e) => setAdminForm({ ...adminForm, docente_id: e.target.value })}
-              fullWidth required
-              helperText="ID del docente que impartirá la tutoría"
-            />
+            <FormControl fullWidth required>
+              <InputLabel>Docente</InputLabel>
+              <Select
+                value={adminForm.docente_id}
+                label="Docente"
+                onChange={(e) => setAdminForm({ ...adminForm, docente_id: e.target.value })}
+              >
+                {isLoadingDocentes ? (
+                  <MenuItem disabled>Cargando docentes...</MenuItem>
+                ) : docentesList.length === 0 ? (
+                  <MenuItem disabled>No hay docentes registrados</MenuItem>
+                ) : (
+                  docentesList.map((d) => (
+                    <MenuItem key={d.id} value={d.id}>
+                      {d.nombres} {d.apellidos} — ID: {d.id}{d.facultad_nombre ? ` (${d.facultad_nombre})` : ''}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             <TextField
               label="Tema"
               value={adminForm.tema}
@@ -516,13 +634,23 @@ export default function TutoriasPage() {
               fullWidth required
               helperText="Tema de la sesión de tutoría"
             />
-            <TextField
-              label="ID de asignatura (opcional)"
-              type="number"
-              value={adminForm.asignatura_id}
-              onChange={(e) => setAdminForm({ ...adminForm, asignatura_id: e.target.value })}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel>Materia (opcional)</InputLabel>
+              <Select
+                value={adminForm.asignatura_id}
+                label="Materia (opcional)"
+                onChange={(e) => setAdminForm({ ...adminForm, asignatura_id: e.target.value })}
+              >
+                <MenuItem value="">Ninguna</MenuItem>
+                {isLoadingAsignaturas ? (
+                  <MenuItem disabled>Cargando materias...</MenuItem>
+                ) : (
+                  asignaturasList.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>{a.nombre}</MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             <TextField
               label="Descripción (opcional)"
               value={adminForm.descripcion}
@@ -598,7 +726,7 @@ export default function TutoriasPage() {
                     color="success"
                   />
                 }
-                label={`Estudiante #${ins.estudiante_id}`}
+                label={ins.estudiante_nombre || `Estudiante #${ins.estudiante_id}`}
               />
             ))
           )}
@@ -618,6 +746,42 @@ export default function TutoriasPage() {
         severity="warning"
         loading={isTeacher ? isRechazando : isCancelling}
       />
+
+      {/* Modal: Asignar docente a solicitud (admin) */}
+      {isAdmin && (
+        <Dialog open={asignarModalOpen} onClose={() => { setAsignarModalOpen(false); setSolicitudSeleccionada(null) }} maxWidth="sm" fullWidth>
+          <DialogTitle>Asignar docente a solicitud #{solicitudSeleccionada}</DialogTitle>
+          <DialogContent dividers>
+            {isLoadingDocentes ? (
+              <Typography color="text.secondary" sx={{ py: 2 }}>Cargando docentes...</Typography>
+            ) : docentesList.length === 0 ? (
+              <Typography color="text.secondary" sx={{ py: 2 }}>No hay docentes registrados.</Typography>
+            ) : (
+              <List dense>
+                {docentesList.map((d: any) => (
+                  <ListItemButton
+                    key={d.id}
+                    onClick={() => {
+                      if (solicitudSeleccionada) {
+                        asignarDocenteMutation.mutate({ solicitudId: solicitudSeleccionada, docenteId: d.id })
+                      }
+                    }}
+                    disabled={asignarDocenteMutation.isPending}
+                  >
+                    <ListItemText
+                      primary={`${d.nombres} ${d.apellidos}`}
+                      secondary={`ID: ${d.id}${d.facultad_nombre ? ` — ${d.facultad_nombre}` : ''}`}
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => { setAsignarModalOpen(false); setSolicitudSeleccionada(null) }}>Cancelar</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   )
 }
