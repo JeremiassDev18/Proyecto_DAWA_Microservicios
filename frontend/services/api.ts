@@ -2,9 +2,14 @@ import axios, { AxiosInstance, type InternalAxiosRequestConfig, type AxiosReques
 import { API_CONFIG } from '@/lib/api.config'
 
 let logoutHandler: (() => void) | null = null
+let isLoggingOut = false
 
 export function setLogoutHandler(handler: () => void) {
   logoutHandler = handler
+}
+
+export function resetLogoutFlag() {
+  isLoggingOut = false
 }
 
 function getToken(): string | null {
@@ -47,7 +52,8 @@ function createClient(baseURL: string): AxiosInstance {
     (error: AxiosError) => {
       const status = error.response?.status
 
-      if (status === 401 && logoutHandler) {
+      if (status === 401 && logoutHandler && !isLoggingOut) {
+        isLoggingOut = true
         document.cookie = 'token=; path=/; max-age=0; SameSite=Lax'
         logoutHandler()
       }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { authService } from '@/services/api/auth.service'
 import { adminService } from '@/services/api/admin.service'
+import { resetLogoutFlag } from '@/services/api'
 import type { User } from '@/types/auth.types'
 import type { Estudiante } from '@/types/admin.types'
 import { ROUTES } from '@/config/routes'
@@ -104,6 +105,7 @@ export function useAuth() {
       setTokenCookie(response.access_token)
       setToken(response.access_token)
       setUser(response.user)
+      resetLogoutFlag()
       router.push(ROUTES.HOME)
       return response
     } finally {

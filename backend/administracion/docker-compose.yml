@@ -58,5 +58,3 @@ volumes:
 
 networks:
   administration-network:
-    external: true
-    name: tutorias-mesh

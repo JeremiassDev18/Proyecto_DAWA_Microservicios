@@ -347,14 +347,6 @@ volumes:
 
 networks:
   administration-network:
-    external: true
-    name: tutorias-mesh
   tutorias-network:
-    external: true
-    name: tutorias-mesh
   chatbot-network:
-    external: true
-    name: tutorias-mesh
   security-network:
-    external: true
-    name: tutorias-mesh
