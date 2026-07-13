@@ -20,12 +20,6 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function ClientOnly({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  return mounted ? <>{children}</> : null
-}
-
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
@@ -42,9 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthBridge>
-          <ClientOnly>
-            {children}
-          </ClientOnly>
+          {children}
         </AuthBridge>
         <Toaster
           position="top-right"

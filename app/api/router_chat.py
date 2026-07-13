@@ -53,6 +53,7 @@ def chat(
             carrera_id=req.carrera_id,
             periodo_id=req.periodo_id,
             rol=rol,
+            email=auth.email or "",
         )
 
         return ChatResponse(**result)
@@ -129,10 +130,8 @@ def get_conversation_messages(id_conversacion: int, conn=Depends(get_db)):
             id_conversacion=id_conversacion,
             rol=row[1],
             contenido=row[2],
-            tipo_resolucion=row[3],
-            confianza_ml=float(row[5]) if row[5] is not None else None,
-            modelo_usado=row[6],
-            enviado_en=row[7],
+            tipo_resolucion=row[3] if len(row) > 3 else None,
+            enviado_en=row[4] if len(row) > 4 else None,
         )
         for row in rows
     ]

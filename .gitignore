@@ -43,6 +43,9 @@ data/*.npz
 # === Secrets / Config local ===
 .env
 
+# === Orphan nginx snippet (already inline in nginx.conf) ===
+gateway/cors-options.conf
+
 # === OS ===
 .DS_Store
 Thumbs.db

@@ -37,6 +37,7 @@ class AgentChatRequest(BaseModel):
     carrera_id: int | None = None
     periodo_id: int | None = None
     rol: str = "estudiante"
+    email: str = ""
 
 
 class AgentChatResponse(BaseModel):
@@ -110,5 +111,6 @@ def agent_chat(payload: AgentChatRequest, conn=Depends(get_db)):
         carrera_id=payload.carrera_id,
         periodo_id=payload.periodo_id,
         rol=payload.rol,
+        email=payload.email,
     )
     return AgentChatResponse(**result)

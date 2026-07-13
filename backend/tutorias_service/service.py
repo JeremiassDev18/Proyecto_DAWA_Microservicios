@@ -306,8 +306,9 @@ class TutoriasService:
                 if not val_doc.get("valido"):
                     raise ValueError(val_doc.get("mensaje", "Docente no encontrado en Administracionfix"))
 
-            if not self.validar_disponibilidad_docente(str(docente_id),
-                                                        solicitud.fecha_solicitud.strftime("%Y-%m-%d")):
+            if solicitud.fecha_agendada and not self.validar_disponibilidad_docente(
+                str(docente_id), solicitud.fecha_agendada.strftime("%Y-%m-%d")
+            ):
                 return {"asignada": False, "docente_id": int(docente_id), "motivo": "Docente sin disponibilidad"}
 
             estado_anterior = solicitud.estado
@@ -672,12 +673,31 @@ class TutoriasService:
     def consultar_mis_bitacoras(self, estudiante_id: int | str) -> List[Dict[str, object]]:
         db = self._get_db()
         try:
-            resultados = (
+            eid = int(estudiante_id)
+            # Bitácoras de tutorías individuales (directas del estudiante)
+            directos = (
                 db.query(SolicitudTutoria, BitacoraAtencion)
                 .join(BitacoraAtencion, BitacoraAtencion.solicitud_id == SolicitudTutoria.id)
-                .filter(SolicitudTutoria.estudiante_id == int(estudiante_id))
+                .filter(SolicitudTutoria.estudiante_id == eid)
                 .all()
             )
+            # Bitácoras de sesiones grupales donde el estudiante se inscribió
+            grupales = (
+                db.query(SolicitudTutoria, BitacoraAtencion)
+                .join(SesionTutoria, SesionTutoria.solicitud_id == SolicitudTutoria.id)
+                .join(InscripcionSesion, InscripcionSesion.sesion_id == SesionTutoria.id)
+                .join(BitacoraAtencion, BitacoraAtencion.solicitud_id == SolicitudTutoria.id)
+                .filter(InscripcionSesion.estudiante_id == eid)
+                .all()
+            )
+            # Combinar evitando duplicados
+            seen = set()
+            resultados = []
+            for s, b in directos + grupales:
+                key = (s.id, b.id)
+                if key not in seen:
+                    seen.add(key)
+                    resultados.append((s, b))
             return [
                 {
                     "solicitud_id": s.id,
@@ -1008,6 +1028,17 @@ class TutoriasService:
                 )
                 db.add(bitacora)
 
+            if solicitud and solicitud.estudiante_id:
+                self._crear_notificacion(db, sesion.solicitud_id, solicitud.estudiante_id, "estudiante",
+                                         "bitacora", f"La sesión de tutoría #{sesion.id} ha finalizado. Revisa la bitácora registrada.")
+            inscripciones = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == sesion.id,
+                InscripcionSesion.estudiante_id != (solicitud.estudiante_id if solicitud else None),
+            ).all()
+            for ins in inscripciones:
+                self._crear_notificacion(db, sesion.solicitud_id, ins.estudiante_id, "estudiante",
+                                         "bitacora", f"La sesión de tutoría grupal #{sesion.id} en la que participaste ha finalizado. Revisa la bitácora.")
+
             self._registrar_auditoria(db, usuario_id, "FINALIZAR_SESION",
                                       f"Sesión {sesion_id} finalizada")
 
@@ -1226,6 +1257,22 @@ class TutoriasService:
                 fecha_registro=_now(),
             )
             db.add(bitacora)
+
+            # Notificar al estudiante de la solicitud original
+            solicitud = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.id == sesion.solicitud_id
+            ).first()
+            if solicitud and solicitud.estudiante_id:
+                self._crear_notificacion(db, sesion.solicitud_id, solicitud.estudiante_id, "estudiante",
+                                         "bitacora", f"Se ha registrado una bitácora para la sesión #{sesion.id}.")
+            # Notificar a los estudiantes inscritos en la sesión grupal
+            inscripciones = db.query(InscripcionSesion).filter(
+                InscripcionSesion.sesion_id == sesion.id,
+                InscripcionSesion.estudiante_id != (solicitud.estudiante_id if solicitud else None),
+            ).all()
+            for ins in inscripciones:
+                self._crear_notificacion(db, sesion.solicitud_id, ins.estudiante_id, "estudiante",
+                                         "bitacora", f"Se ha registrado una bitácora para la sesión grupal #{sesion.id} en la que participaste.")
 
             self._registrar_auditoria(db, usuario_id, "REGISTRAR_BITACORA_SESION",
                                       f"Bitácora registrada para sesión {sesion_id}")

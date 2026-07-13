@@ -52,7 +52,17 @@ _ADMIN_LIST_ESTUDIANTES_RE = re.compile(
     re.IGNORECASE,
 )
 _ADMIN_LIST_TUTORIAS_RE = re.compile(
-    r"(listar?|mostrar?|ver|enseñar|dar)\s+(las?\s+)?tutor[ií]as?",
+    r"(listar?|mostrar?|ver|enseñar|dar)\s+((todas\s+)?las?\s+)?tutor[ií]as?",
+    re.IGNORECASE,
+)
+_ADMIN_LIST_FACULTADES_RE = re.compile(
+    r"(listar?|mostrar?|ver|enseñar|dar|dime|cu[aá]les?\s+son|qu[eé])\s+(las\s+)?(facultades?)"
+    r"|(facultades?)\s+(disponibles?|que\s+hay|existentes?)",
+    re.IGNORECASE,
+)
+_ADMIN_LIST_CARRERAS_RE = re.compile(
+    r"(listar?|mostrar?|ver|enseñar|dar|dime|cu[aá]les?\s+son|qu[eé])\s+(las\s+)?(carreras?)"
+    r"|(carreras?)\s+(disponibles?|que\s+hay|existentes?)",
     re.IGNORECASE,
 )
 
@@ -94,7 +104,9 @@ _DOCENTE_MIS_MATERIAS_RE = re.compile(
     r"|qu[eé]\s+materias\s+(doy|dicto|tengo|imparto)"
     r"|en\s+qu[eé]\s+materias\s+(doy|dicto|imparto)"
     r"|cu[aá]les?\s+son\s+mis\s+asignaturas|cu[aá]les?\s+son\s+mis\s+materias"
-    r"|ver\s+mis\s+asignaturas|ver\s+mis\s+materias)",
+    r"|ver\s+mis\s+asignaturas|ver\s+mis\s+materias"
+    r"|qu[eé]\s+asignaturas\s+imparto|qu[eé]\s+materias\s+imparto"
+    r"|d[oó]nde\s+estoy\s+dando|en\s+d[oó]nde\s+doy\s+clase)",
     re.IGNORECASE,
 )
 _DOCENTE_MIS_ESTUDIANTES_RE = re.compile(
@@ -103,6 +115,21 @@ _DOCENTE_MIS_ESTUDIANTES_RE = re.compile(
     r"|cu[aá]ntos?\s+estudiantes?\s+tengo"
     r"|quién\s+(est[aá]\s+en|tiene)\s+(mis\s+materias|mis\s+asignaturas)"
     r"|ver\s+mis\s+estudiantes)",
+    re.IGNORECASE,
+)
+
+# ─── Docente+tutoría pre-routing: "tutoría con X", "bitácora de X", etc. ──────
+_DOCENTE_TUTORIA_QUERY_RE = re.compile(
+    r"(tutor[ií]a\s+(que\s+)?(me\s+)?(dio|di[oó]|tuvo|dict[oó]|imparti[oó])\s+(el\s+)?(profesor|profe|docente)"
+    r"|tutor[ií]a\s+con\s+(el\s+)?(profesor|profe|docente)"
+    r"|qu[eé]\s+tutor[ií]a\s+(me\s+)?(dio|di[oó]|tuvo)\s+(el\s+)?(profesor|profe|docente)"
+    r"|bit[aá]cora\s+(de|del?)\s+(el\s+)?(profesor|profe|docente)"
+    r"|qu[eé]\s+me\s+(puso|ponen?|registr[oó])\s+(en\s+)?(su\s+)?bit[aá]cora"
+    r"|qu[eé]\s+puso\s+(el\s+)?(profesor|profe|docente)\s+en\s+(su\s+)?bit[aá]cora"
+    r"|qué\s+me\s+puso\s+en\s+su\s+bitácora"
+    r"|qué\s+tutoría\s+me\s+dio\s+.*profesor"
+    r"|bitácora\s+de\s+.*profesor"
+    r"|tutoría\s+con\s+.*profesor)",
     re.IGNORECASE,
 )
 
@@ -242,6 +269,110 @@ def _detect_docente_self_query(mensaje: str) -> dict | None:
     return None
 
 
+def _detect_docente_tutoria_query(mensaje: str) -> dict | None:
+    """Detecta preguntas sobre tutorías o bitácoras de un docente específico."""
+    msg = mensaje.strip()
+
+    if _DOCENTE_TUTORIA_QUERY_RE.search(msg):
+        # Extraer nombre del docente si se menciona.
+        m = re.search(
+            r"(?:profesor|profe|docente)\s+(?:de\s+)?(.+?)(?:\?|$)",
+            msg, re.IGNORECASE,
+        )
+        materia = m.group(1).strip().rstrip("?").strip() if m else ""
+        materia = re.sub(
+            r"^(el|la|los|las|un|una|del|de\s+la|al)\s+",
+            "", materia, flags=re.IGNORECASE,
+        ).strip()
+        if any(w in msg.lower() for w in ("bitácora", "bitacora", "puso", "ponen", "registr")):
+            return {"tool": "consultar_bitacoras", "materia": materia}
+        return {"tool": "buscar_docentes", "materia": materia}
+
+    return None
+
+
+_TOOL_FUNC_NAMES = {
+    "listar_docentes", "listar_estudiantes", "listar_tutorias",
+    "listar_facultades", "listar_carreras",
+    "consultar_materias",
+    "consultar_bitacoras", "consultar_tutorias", "buscar_docentes", "sugerir_docente",
+    "estadisticas_sistema", "listar_estudiantes_por_docente", "buscar_conocimiento",
+    "escalar_conversacion", "consultar_perfil", "consultar_perfil_completo",
+    "crear_tutoria", "cancelar_tutoria", "buscar_sesiones_abiertas", "inscribirse_sesion",
+    "aceptar_solicitud_tutoria", "rechazar_solicitud_tutoria",
+    "listar_sesiones_docente", "listar_solicitudes_pendientes",
+    "iniciar_sesion_tutoria", "finalizar_sesion_tutoria",
+}
+
+
+def _looks_like_tool_output(text: str) -> bool:
+    """Check if text looks like raw tool output rather than a natural response."""
+    t = text.strip()
+    if not t:
+        return False
+    # JSON block detection
+    if t.startswith("{") and ("tool" in t or "name" in t or "function" in t):
+        return True
+    # Tool call with parens: tool_name(...)
+    for name in _TOOL_FUNC_NAMES:
+        if name in t:
+            idx = t.index(name)
+            after = t[idx + len(name):]
+            after_stripped = after.lstrip()
+            if after_stripped.startswith("(") or after_stripped.startswith("{"):
+                return True
+            # JSON-like: "tool_name":"value" or "tool_name": "value"
+            if after_stripped.startswith(":") or after_stripped.startswith('"'):
+                return True
+    # Starts with " or { and contains tool names
+    if (t[0] in ('"', '{', '[')) and any(n in t for n in _TOOL_FUNC_NAMES):
+        return True
+    return False
+
+
+def _sanitize_llm_response(llm_text: str, fallback: str) -> str:
+    """Limpia la respuesta del LLM si contiene texto de tool calls crudos.
+
+    Si el modelo devuelve algo como ``listar docentes(Programación)`` o
+    un bloque JSON con tool calling, lo reemplaza con el fallback (resultado
+    real de la herramienta) en vez de mostrarlo al usuario.
+    """
+    if not llm_text:
+        return fallback
+
+    text = llm_text.strip()
+
+    # Si el texto es puramente un tool call (con o sin markdown wrapper).
+    if _looks_like_tool_output(text):
+        logger.warning(f"[AgentPlanner] LLM response contiene tool call crudo, usando fallback")
+        return fallback
+
+    # Si el texto tiene JSON/llaves como componente principal (>50% del texto).
+    json_like = text.count("{") + text.count("}")
+    if json_like > 4 and len(text) < 200:
+        logger.warning(f"[AgentPlanner] LLM response parece JSON, usando fallback")
+        return fallback
+
+    # Si termina con paréntesis vacío o tiene patrón de función.
+    if text.endswith("()") or text.endswith("({})"):
+        logger.warning(f"[AgentPlanner] LLM response termina con función vacía, usando fallback")
+        return fallback
+
+    # Filtrar líneas que son solo tool calls.
+    lineas = text.split("\n")
+    lineas_limpias = []
+    for linea in lineas:
+        if _looks_like_tool_output(linea.strip()):
+            continue
+        lineas_limpias.append(linea)
+    text = "\n".join(lineas_limpias).strip()
+
+    if not text or len(text) < 5:
+        return fallback
+
+    return text
+
+
 def _detect_admin_query(mensaje: str) -> dict | None:
     """Detecta preguntas admin (estadísticas, listar) y retorna tool a ejecutar."""
     msg = mensaje.strip()
@@ -263,6 +394,10 @@ def _detect_admin_query(mensaje: str) -> dict | None:
         return {"tool": "listar_estudiantes", "params": {}}
     if _ADMIN_LIST_TUTORIAS_RE.search(msg):
         return {"tool": "listar_tutorias", "params": {}}
+    if _ADMIN_LIST_FACULTADES_RE.search(msg):
+        return {"tool": "listar_facultades", "params": {}}
+    if _ADMIN_LIST_CARRERAS_RE.search(msg):
+        return {"tool": "listar_carreras", "params": {}}
 
     return None
 
@@ -320,6 +455,7 @@ class AgentPlanner:
         carrera_id: int | None = None,
         periodo_id: int | None = None,
         rol: str = "estudiante",
+        email: str = "",
         memory: ConversationMemory | None = None,
     ):
         self.estudiante_id = estudiante_id
@@ -327,6 +463,7 @@ class AgentPlanner:
         self.carrera_id = carrera_id
         self.periodo_id = periodo_id
         self.rol = rol
+        self.email = email
 
         self.tools = get_available_tools()
         self.validator = ToolValidator(self.tools)
@@ -374,6 +511,10 @@ class AgentPlanner:
                 result = self._admin.listar_estudiantes_admin(consulta=tool_params.get("consulta", ""))
             elif tool_name == "listar_tutorias":
                 result = self._admin.listar_tutorias_admin(consulta=tool_params.get("consulta", ""))
+            elif tool_name == "listar_facultades":
+                result = self._admin.listar_facultades()
+            elif tool_name == "listar_carreras":
+                result = self._admin.listar_carreras()
             else:
                 result = self._admin.estadisticas_sistema()
             herramientas_usadas = [tool_name]
@@ -385,11 +526,7 @@ class AgentPlanner:
                 options={"num_ctx": 2048, "temperature": 0.3},
             )
             final_content = raw_final.content if raw_final else result[0]
-            # Si el LLM devuelve basura (función o muy corto), usar resultado raw.
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = result[0]
+            final_content = _sanitize_llm_response(final_content, result[0])
             self.memory.add("assistant", final_content)
             self._maybe_summarize()
             return AgentResponse(
@@ -421,16 +558,94 @@ class AgentPlanner:
                 options={"num_ctx": 2048, "temperature": 0.3},
             )
             final_content = raw_final.content if raw_final else result[0]
-            # Si el LLM devuelve basura, usar resultado raw.
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = result[0]
+            final_content = _sanitize_llm_response(final_content, result[0])
             self.memory.add("assistant", final_content)
             self._maybe_summarize()
             return AgentResponse(
                 mensaje=final_content,
                 intencion_detectada="buscar_docentes",
+                herramientas_usadas=herramientas_usadas,
+            )
+
+        # Pre-routing docente: sus propias asignaturas y estudiantes.
+        # IMPORTANTE: debe ir ANTES de _detect_student_query para que
+        # "qué materias doy" no se confunda con "mis materias" de estudiante.
+        docente_self_match = _detect_docente_self_query(mensaje)
+        if docente_self_match and self.rol in ("docente", "admin", "manager"):
+            tool_name = docente_self_match["tool"]
+            logger.info(f"[AgentPlanner] pre-routing docente-self: tool={tool_name}")
+            try:
+                if tool_name == "docente_mis_asignaturas":
+                    content, state = self._admin.listar_estudiantes_por_docente(
+                        usuario_id=self.usuario_id, email=self.email,
+                    )
+                elif tool_name == "docente_mis_estudiantes":
+                    content, state = self._admin.listar_estudiantes_por_docente(
+                        usuario_id=self.usuario_id, email=self.email,
+                    )
+                else:
+                    content, state = "No se pudo procesar la solicitud.", {}
+            except Exception as e:
+                logger.error(f"[AgentPlanner] pre-routing docente-self error: {e}")
+                content, state = f"Error al consultar {tool_name}: {e}", {}
+
+            herramientas_usadas = [tool_name]
+            self.memory.update_state(state)
+            self.memory.add("tool", content, name=tool_name)
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else content
+            final_content = _sanitize_llm_response(final_content, content)
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada=tool_name,
+                herramientas_usadas=herramientas_usadas,
+            )
+
+        # Pre-routing: detectar preguntas sobre tutorías/bitácoras de un docente específico.
+        docente_tutoria_match = _detect_docente_tutoria_query(mensaje)
+        if docente_tutoria_match and self.rol in ("estudiante", "admin", "docente", "manager"):
+            tool_name = docente_tutoria_match["tool"]
+            logger.info(f"[AgentPlanner] pre-routing docente-tutoria: tool={tool_name}")
+            try:
+                if tool_name == "consultar_bitacoras":
+                    content, state = self._tutorias.consultar_bitacoras_resumidas(
+                        estudiante_id=self.estudiante_id, rol=self.rol,
+                    )
+                elif tool_name == "buscar_docentes":
+                    materia = docente_tutoria_match.get("materia", "")
+                    content, state = self._admin.buscar_docentes(
+                        consulta=materia,
+                        estudiante_id=self.estudiante_id,
+                        posesivo="mios",
+                        materia=materia or None,
+                    )
+                else:
+                    content, state = "No se pudo procesar la solicitud.", {}
+            except Exception as e:
+                logger.error(f"[AgentPlanner] pre-routing docente-tutoria error: {e}")
+                content, state = f"Error al consultar: {e}", {}
+
+            herramientas_usadas = [tool_name]
+            self.memory.update_state(state)
+            self.memory.add("tool", content, name=tool_name)
+            self._refresh_system_prompt()
+            raw_final = self.ollama.chat(
+                self.memory.get_messages(),
+                options={"num_ctx": 2048, "temperature": 0.3},
+            )
+            final_content = raw_final.content if raw_final else content
+            final_content = _sanitize_llm_response(final_content, content)
+            self.memory.add("assistant", final_content)
+            self._maybe_summarize()
+            return AgentResponse(
+                mensaje=final_content,
+                intencion_detectada=tool_name,
                 herramientas_usadas=herramientas_usadas,
             )
 
@@ -464,52 +679,7 @@ class AgentPlanner:
                 options={"num_ctx": 2048, "temperature": 0.3},
             )
             final_content = raw_final.content if raw_final else content
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = content
-            self.memory.add("assistant", final_content)
-            self._maybe_summarize()
-            return AgentResponse(
-                mensaje=final_content,
-                intencion_detectada=tool_name,
-                herramientas_usadas=herramientas_usadas,
-            )
-
-        # Pre-routing docente: sus propias asignaturas y estudiantes.
-        docente_self_match = _detect_docente_self_query(mensaje)
-        if docente_self_match and self.rol in ("docente", "admin", "manager"):
-            tool_name = docente_self_match["tool"]
-            logger.info(f"[AgentPlanner] pre-routing docente-self: tool={tool_name}")
-            eid = self.estudiante_id
-            try:
-                if tool_name == "docente_mis_asignaturas":
-                    content, state = self._admin.listar_docentes_admin(
-                        consulta="", usuario_id=self.usuario_id,
-                    )
-                elif tool_name == "docente_mis_estudiantes":
-                    content, state = self._admin.listar_estudiantes_por_docente(
-                        usuario_id=self.usuario_id,
-                    )
-                else:
-                    content, state = "No se pudo procesar la solicitud.", {}
-            except Exception as e:
-                logger.error(f"[AgentPlanner] pre-routing docente-self error: {e}")
-                content, state = f"Error al consultar {tool_name}: {e}", {}
-
-            herramientas_usadas = [tool_name]
-            self.memory.update_state(state)
-            self.memory.add("tool", content, name=tool_name)
-            self._refresh_system_prompt()
-            raw_final = self.ollama.chat(
-                self.memory.get_messages(),
-                options={"num_ctx": 2048, "temperature": 0.3},
-            )
-            final_content = raw_final.content if raw_final else content
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = content
+            final_content = _sanitize_llm_response(final_content, content)
             self.memory.add("assistant", final_content)
             self._maybe_summarize()
             return AgentResponse(
@@ -534,10 +704,7 @@ class AgentPlanner:
                 options={"num_ctx": 2048, "temperature": 0.3},
             )
             final_content = raw_final.content if raw_final else content
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = content
+            final_content = _sanitize_llm_response(final_content, content)
             self.memory.add("assistant", final_content)
             self._maybe_summarize()
             return AgentResponse(
@@ -590,10 +757,7 @@ class AgentPlanner:
                 options={"num_ctx": 2048, "temperature": 0.3},
             )
             final_content = raw_final.content if raw_final else content
-            if (not final_content
-                    or final_content.strip().endswith("()")
-                    or len(final_content.strip()) < 10):
-                final_content = content
+            final_content = _sanitize_llm_response(final_content, content)
             self.memory.add("assistant", final_content)
             self._maybe_summarize()
             return AgentResponse(
@@ -616,11 +780,16 @@ class AgentPlanner:
             # 1. ¿El modelo pidió una herramienta?
             tool_call = self.validator.parse(content)
             if tool_call is None:
-                # Respuesta directa.
-                self.memory.add("assistant", content)
+                # Respuesta directa — sanitizar por si el LLM pegó tool call text.
+                safe_content = _sanitize_llm_response(content, "")
+                if not safe_content:
+                    safe_content = (
+                        "No pude procesar tu pregunta. ¿Podrías reformularla?"
+                    )
+                self.memory.add("assistant", safe_content)
                 self._maybe_summarize()
                 return AgentResponse(
-                    mensaje=content,
+                    mensaje=safe_content,
                     intencion_detectada="respuesta_directa",
                     herramientas_usadas=herramientas_usadas,
                 )
@@ -656,6 +825,9 @@ class AgentPlanner:
         final_content = raw_final.content if raw_final else (
             "Procesé tu solicitud, pero no pudo generar una respuesta final."
         )
+        # Sanitizar la respuesta final del LLM.
+        fallback_final = herramientas_usadas[-1] if herramientas_usadas else ""
+        final_content = _sanitize_llm_response(final_content, fallback_final or final_content)
         self.memory.add("assistant", final_content)
         self._maybe_summarize()
 
@@ -812,7 +984,7 @@ class AgentPlanner:
 
             if call.tool == "listar_estudiantes_por_docente":
                 content, state = self._admin.listar_estudiantes_por_docente(
-                    usuario_id=self.usuario_id,
+                    usuario_id=self.usuario_id, email=self.email,
                 )
                 return ToolResult(tool=call.tool, parameters=call.parameters, success=True, content=content, state_updates=state)
 

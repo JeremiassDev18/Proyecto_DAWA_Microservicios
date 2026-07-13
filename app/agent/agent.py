@@ -25,6 +25,7 @@ class Agent:
         carrera_id: int | None = None,
         periodo_id: int | None = None,
         rol: str = "estudiante",
+        email: str = "",
         memory: ConversationMemory | None = None,
     ):
         self.estudiante_id = estudiante_id
@@ -32,6 +33,7 @@ class Agent:
         self.carrera_id = carrera_id
         self.periodo_id = periodo_id
         self.rol = rol
+        self.email = email
         self._memory = memory
         self._planner: AgentPlanner | None = None
 
@@ -49,6 +51,7 @@ class Agent:
                 carrera_id=self.carrera_id,
                 periodo_id=self.periodo_id,
                 rol=self.rol,
+                email=self.email,
                 memory=self._memory,
             )
         else:
@@ -58,6 +61,7 @@ class Agent:
             self._planner.carrera_id = self.carrera_id
             self._planner.periodo_id = self.periodo_id
             self._planner.rol = self.rol
+            self._planner.email = self.email
 
         return self._planner.run(mensaje, db_conn=db_conn)
 

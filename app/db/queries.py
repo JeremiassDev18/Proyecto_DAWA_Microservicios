@@ -114,8 +114,7 @@ def insert_mensaje(conn, id_conversacion: int, rol: str, contenido: str,
 def get_mensajes_by_conversacion(conn, id_conversacion: int):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, rol, contenido, tipo_resolucion, id_intencion, "
-            "confianza_ml, modelo_usado, enviado_en "
+            "SELECT id, rol, contenido, tipo_resolucion, enviado_en "
             "FROM chatbot_mensaje WHERE id_conversacion = %s "
             "ORDER BY enviado_en",
             (id_conversacion,),
@@ -126,8 +125,7 @@ def get_mensajes_by_conversacion(conn, id_conversacion: int):
 def get_mensaje_by_id(conn, id_mensaje: int):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, id_conversacion, rol, contenido, tipo_resolucion, "
-            "id_intencion, confianza_ml, modelo_usado, enviado_en "
+            "SELECT id, id_conversacion, rol, contenido, tipo_resolucion, enviado_en "
             "FROM chatbot_mensaje WHERE id = %s",
             (id_mensaje,),
         )
@@ -483,8 +481,7 @@ def get_conversacion_with_mensajes(conn, id_conversacion: int):
         if not conv:
             return None
         cur.execute(
-            "SELECT id, rol, contenido, tipo_resolucion, "
-            "id_intencion, confianza_ml, enviado_en "
+            "SELECT id, rol, contenido, tipo_resolucion, enviado_en "
             "FROM chatbot_mensaje WHERE id_conversacion = %s "
             "ORDER BY enviado_en",
             (id_conversacion,),

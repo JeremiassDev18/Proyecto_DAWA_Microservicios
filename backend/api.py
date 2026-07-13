@@ -6,7 +6,6 @@ from threading import Thread
 from typing import Any
 
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,6 @@ def _is_public(path: str) -> bool:
 
 def create_app(service: Any) -> Flask:
     app = Flask(__name__)
-    CORS(app)
 
     @app.before_request
     def check_auth():
@@ -95,17 +93,6 @@ def create_app(service: Any) -> Flask:
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             logger.error(f"Error creando solicitud: {e}")
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/tutorias/solicitudes/<solicitud_id>", methods=["GET"])
-    def obtener_solicitud(solicitud_id: str):
-        try:
-            tutoria = service.obtener_tutoria(solicitud_id)
-            return jsonify(tutoria), 200
-        except KeyError:
-            return jsonify({"error": "Solicitud no encontrada"}), 404
-        except Exception as e:
-            logger.error(f"Error obteniendo solicitud {solicitud_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/tutorias/solicitudes", methods=["GET"])

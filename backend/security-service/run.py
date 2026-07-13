@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, request, g
-from flask_cors import CORS
 import os
 import requests
 
@@ -20,7 +19,6 @@ def create_app() -> Flask:
     app.config["JWT_SECRET_KEY"] = Config.JWT_SECRET_KEY
     app.config["JSON_SORT_KEYS"] = False
 
-    CORS(app)
     init_db_pool()
     app.register_blueprint(permission_bp)
 

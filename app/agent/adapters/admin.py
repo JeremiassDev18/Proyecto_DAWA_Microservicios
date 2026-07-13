@@ -54,6 +54,16 @@ class AdminAdapter:
             lineas.append(f"- {c.get('nombre', 'N/A')} ({c.get('codigo', 'N/A')})")
         return "\n".join(lineas), {}
 
+    def listar_facultades(self) -> tuple[str, dict]:
+        """Devuelve el listado de facultades disponibles."""
+        facultades = self.admin.get_facultades()
+        if not facultades:
+            return "No pude obtener el listado de facultades en este momento.", {}
+        lineas = ["Facultades disponibles:"]
+        for f in facultades:
+            lineas.append(f"- {f.get('nombre', 'N/A')} ({f.get('codigo', 'N/A')})")
+        return "\n".join(lineas), {}
+
     def buscar_docentes(self, consulta: str, estudiante_id: int | None = None,
                         posesivo: str = "todos", materia: str | None = None) -> tuple[str, dict]:
         """Busca docentes según contexto: del estudiante o institucional.
@@ -274,24 +284,40 @@ class AdminAdapter:
 
         return content, stats
 
-    def listar_estudiantes_por_docente(self, usuario_id: int) -> tuple[str, dict]:
-        """Lista las materias del docente y sus estudiantes asignados."""
-        logger.info(f"[AdminAdapter] listar_estudiantes_por_docente usuario_id={usuario_id}")
+    def listar_estudiantes_por_docente(self, usuario_id: int, email: str = "") -> tuple[str, dict]:
+        """Lista las materias del docente y sus estudiantes asignados.
+
+        Busca el docente por correo (email) si se proporciona, ya que los
+        docentes no tienen campo usuario_id en la base de datos.
+        """
+        logger.info(f"[AdminAdapter] listar_estudiantes_por_docente usuario_id={usuario_id} email={email}")
 
         try:
             docentes = self.admin._get("/api/administracion/docentes/")
             docentes = docentes if isinstance(docentes, list) else []
 
             docente = None
-            for d in docentes:
-                uid = d.get("usuario_id") or (d.get("usuario", {}) or {}).get("id")
-                if uid == usuario_id:
-                    docente = d
-                    break
+
+            # Primero buscar por correo (más confiable).
+            if email:
+                email_lower = email.lower()
+                for d in docentes:
+                    if (d.get("correo", "") or "").lower() == email_lower:
+                        docente = d
+                        break
+
+            # Fallback: buscar por usuario_id (por si acaso).
+            if not docente and usuario_id:
+                for d in docentes:
+                    uid = d.get("usuario_id") or (d.get("usuario", {}) or {}).get("id")
+                    if uid == usuario_id:
+                        docente = d
+                        break
 
             if not docente:
                 return (
-                    f"No se encontró el perfil del docente (usuario_id={usuario_id}).",
+                    "No se encontró tu perfil de docente en el sistema. "
+                    "Contacta al administrador para que vincule tu cuenta.",
                     {},
                 )
         except Exception as e:

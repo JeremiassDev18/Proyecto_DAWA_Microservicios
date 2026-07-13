@@ -36,10 +36,6 @@ class PendingListResponse(BaseModel):
     total: int
 
 
-class HealthResponse(BaseModel):
-    status: str
-
-
 class KnowledgeResponse(BaseModel):
     id: int
     titulo: str
@@ -82,8 +78,6 @@ class MessageResponse(BaseModel):
     rol: str
     contenido: str
     tipo_resolucion: str | None = None
-    confianza_ml: float | None = None
-    modelo_usado: str | None = None
     enviado_en: datetime
 
 

@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router_chat import router as chat_router
 from app.api.router_admin import router as admin_router
@@ -14,14 +13,6 @@ app = FastAPI(
     title="Chatbot Service",
     description="Microservicio de chatbot con agente LLM académico",
     version="2.0.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 app.include_router(chat_router, prefix="/api/v1")

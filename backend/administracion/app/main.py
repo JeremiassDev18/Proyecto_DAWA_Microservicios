@@ -1,6 +1,5 @@
 import os
 from flask import Flask, jsonify
-from flask_cors import CORS
 from dotenv import load_dotenv
 
 from app.database import Base, engine
@@ -21,7 +20,6 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = Flask(__name__)
-CORS(app)
 
 app.register_blueprint(facultades_bp, url_prefix="/api/administracion/facultades")
 app.register_blueprint(carreras_bp, url_prefix="/api/administracion/carreras")

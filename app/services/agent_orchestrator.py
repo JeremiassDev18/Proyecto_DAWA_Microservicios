@@ -36,6 +36,7 @@ def process_message_agent(
     carrera_id: int | None = None,
     periodo_id: int | None = None,
     rol: str = "estudiante",
+    email: str = "",
 ) -> dict:
     """
     Procesa un mensaje usando el agente LLM y persiste todo en DB.
@@ -63,6 +64,7 @@ def process_message_agent(
         carrera_id=carrera_id,
         periodo_id=periodo_id,
         rol=rol,
+        email=email,
     )
 
     # 4. Procesar con el LLM.
@@ -152,6 +154,7 @@ def _get_agent(
     carrera_id: int | None,
     periodo_id: int | None,
     rol: str = "estudiante",
+    email: str = "",
 ) -> Agent:
     """Obtiene un Agent de la caché RAM o lo reconstruye desde PostgreSQL."""
     if conv_id in _agent_cache:
@@ -168,6 +171,8 @@ def _get_agent(
             agent.periodo_id = periodo_id
         if rol is not None:
             agent.rol = rol
+        if email:
+            agent.email = email
         return agent
 
     memory = _load_agent_memory(conn, conv_id)
@@ -178,6 +183,7 @@ def _get_agent(
         carrera_id=carrera_id,
         periodo_id=periodo_id,
         rol=rol,
+        email=email,
         memory=memory,
     )
     _agent_cache[conv_id] = agent
