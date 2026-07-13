@@ -144,6 +144,60 @@ export default function LoginPage() {
               {isLoggingIn ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
           </form>
+
+          <Box
+            sx={{
+              mt: 3,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'grey.50',
+              border: '1px solid',
+              borderColor: 'grey.200',
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 1 }}>
+              Credenciales de prueba
+            </Typography>
+            {[
+              { role: '🎓  Estudiante', email: 'jeremias@test.com', password: 'estudiante123' },
+              { role: '👨‍🏫  Docente', email: 'carlos@test.com', password: 'docente123' },
+              { role: '🔧  Administrador', email: 'admin@sistema.com', password: 'admin123' },
+            ].map((cred) => (
+              <Box
+                key={cred.email}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  py: 0.6,
+                  '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'grey.200' },
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 130, fontSize: '0.8rem' }}>
+                  {cred.role}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.78rem', fontFamily: 'monospace' }}>
+                  {cred.email}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  component="span"
+                  sx={{
+                    ml: 'auto',
+                    color: 'text.disabled',
+                    fontSize: '0.75rem',
+                    fontFamily: 'monospace',
+                    cursor: 'pointer',
+                    '&:hover': { color: 'primary.main' },
+                  }}
+                  onClick={() => navigator.clipboard.writeText(cred.password)}
+                  title="Copiar contraseña"
+                >
+                  {cred.password}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
         </Paper>
       </Box>
     </Container>
