@@ -29,11 +29,11 @@ from .tools import get_available_tools
 
 # Patrones para detectar preguntas sobre docentes/materias y forzar tool call.
 _DOCEMTE_PATTERNS = [
-    re.compile(r"qui[eé]n\s+(ense[nñ]a|imparte|da|dicta|imparte\s+clase|es\s+el\s+profesor|es\s+el\s+docente)\s+(.+)", re.IGNORECASE),
+    re.compile(r"qui[eé]n\s+(me\s+)?(ense[nñ]a|imparte|da|dicta|imparte\s+clase|es\s+el\s+profesor|es\s+el\s+docente)\s+(.+)", re.IGNORECASE),
     re.compile(r"(profesor|docente)\s+(de|del|para)\s+(.+)", re.IGNORECASE),
     re.compile(r"(materias?|asignaturas?)\s+(del?\s+)?(profesor|docente)\s+(.+)", re.IGNORECASE),
-    re.compile(r"qui[eé]n\s+me\s+(ense[nñ]a|imparte)", re.IGNORECASE),
-    re.compile(r"(qué|que)\s+(profesor|docente)\s+(tiene|dicta|imparte|ense[nñ]a)\s+(.+)", re.IGNORECASE),
+    re.compile(r"qui[eé]n\s+me\s+(ense[nñ]a|imparte|da|dicta)", re.IGNORECASE),
+    re.compile(r"(qué|que)\s+(profesor|docente)\s+((me\s+)?(tiene|dicta|imparte|ense[nñ]a|da))\s+(.+)", re.IGNORECASE),
 ]
 _MIS_PROFESORES_RE = re.compile(r"mis\s+(profesores?|docentes?|profes?)", re.IGNORECASE)
 
@@ -94,7 +94,8 @@ _STUDENT_TUTORIAS_RE = re.compile(
 _STUDENT_PERFIL_RE = re.compile(
     r"(mi\s+perfil|dime\s+mi\s+perfil|quién\s+soy|como\s+estoy\s+registrado"
     r"|mis\s+datos|cu[aá]les?\s+son\s+mis\s+datos"
-    r"|informaci[oó]n\s+de\s+mi\s+perfil|ver\s+mi\s+perfil)",
+    r"|informaci[oó]n\s+de\s+mi\s+perfil|ver\s+mi\s+perfil"
+    r"|qu[eé]\s+(facultad|carrera)\s+(soy|estoy|tengo|pertenezco|estudio))",
     re.IGNORECASE,
 )
 

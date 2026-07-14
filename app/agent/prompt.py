@@ -14,7 +14,7 @@ Usuario: id={estudiante_id}, rol={rol}
 Herramientas: {tools}
 
 Formato: <tool_call>{{"name":"herramienta","arguments":{{"param":"valor"}}}}</tool_call>
-{examples}Responde directo si no necesitas herramienta."""
+{examples}Responde directo si no necesitas herramienta. Nunca pidas nombre/ID al usuario — ya lo tienes en el contexto. Usa consultar_perfil."""
 
 
 def build_system_prompt(
