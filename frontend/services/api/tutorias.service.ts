@@ -1,5 +1,5 @@
 import { api } from '@/services/api'
-import type { SolicitudTutoria, SesionTutoria, Notificacion } from '@/types/tutorias.types'
+import type { SolicitudTutoria, SesionTutoria } from '@/types/tutorias.types'
 
 export const tutoriasService = {
   // --- Solicitudes ---
@@ -9,9 +9,6 @@ export const tutoriasService = {
     if (periodoId) params.periodo_id = periodoId
     const data = await api.tutorias.get<any>('/solicitudes', { params })
     return data.solicitudes || data
-  },
-  obtenerSolicitud: async (id: number): Promise<SolicitudTutoria> => {
-    return api.tutorias.get<SolicitudTutoria>(`/solicitudes/${id}`)
   },
   crearSolicitud: async (data: {
     estudiante_id: number; asignatura_id?: number; periodo_id?: number
@@ -33,17 +30,15 @@ export const tutoriasService = {
   },
 
   // --- Sesiones ---
-  listarSesionesAbiertas: async (materiaNombre?: string): Promise<SesionTutoria[]> => {
+  listarSesionesAbiertas: async (materiaNombre?: string, tipo?: string): Promise<SesionTutoria[]> => {
     const params: Record<string, any> = {}
     if (materiaNombre) params.materia_nombre = materiaNombre
+    if (tipo) params.tipo = tipo
     const data = await api.tutorias.get<any>('/sesiones/abiertas', { params })
     return data.sesiones || []
   },
   inscribirseEnSesion: async (sesionId: number, estudianteId: number): Promise<any> => {
     return api.tutorias.post(`/sesiones/${sesionId}/inscribir`, { estudiante_id: estudianteId })
-  },
-  verificarInscripcion: async (sesionId: number, estudianteId: number): Promise<{ inscrito: boolean }> => {
-    return api.tutorias.get(`/sesiones/${sesionId}/inscrito/${estudianteId}`)
   },
   listarInscripcionesEstudiante: async (estudianteId: number): Promise<any[]> => {
     const data = await api.tutorias.get<any>(`/estudiantes/${estudianteId}/inscripciones`)
@@ -73,12 +68,6 @@ export const tutoriasService = {
   // --- Notificaciones ---
   listarBitacorasEstudiante: async (estudianteId: number): Promise<{ cantidad: number; bitacoras: any[] }> => {
     return api.tutorias.get<any>(`/estudiantes/${estudianteId}/bitacoras`)
-  },
-  listarNotificaciones: async (destinatarioId: number, soloNoLeidas = false): Promise<Notificacion[]> => {
-    const data = await api.tutorias.get<any>('/notificaciones', {
-      params: { destinatario_id: destinatarioId, solo_no_leidas: soloNoLeidas },
-    })
-    return data.notificaciones || data
   },
   listarTutoriasPorDocente: async (docenteId: number, periodoId?: number): Promise<{ cantidad: number; tutorias: any[] }> => {
     const params: any = { docente_id: docenteId }

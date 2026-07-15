@@ -14,6 +14,7 @@ import { useTutorias } from '@/hooks/useTutorias'
 import { useAuth } from '@/hooks/useAuth'
 import { useDocentes } from '@/hooks/useDocentes'
 import { useAsignaturas } from '@/hooks/useAsignaturas'
+import { useStudent } from '@/hooks/useStudent'
 import { tutoriasService } from '@/services/api/tutorias.service'
 import { useToast } from '@/hooks/useToast'
 
@@ -27,9 +28,10 @@ const estadoColor = (e: string) => {
 
 export default function TutoriasPage() {
   const { user, estudianteId, docenteId } = useAuth()
-  const isAdmin = user?.roles?.includes('admin')
-  const isStudent = user?.roles?.includes('estudiante')
-  const isTeacher = user?.roles?.includes('profesor') || user?.roles?.includes('docente')
+  const roles = user?.roles ?? []
+  const isAdmin = roles.includes('admin')
+  const isStudent = !isAdmin && roles.includes('estudiante')
+  const isTeacher = !isAdmin && !isStudent && (roles.includes('profesor') || roles.includes('docente'))
   const queryClient = useQueryClient()
   const { showToast } = useToast()
 
@@ -78,10 +80,19 @@ export default function TutoriasPage() {
     isTeacher ? (docenteId ?? undefined) : undefined,
   )
 
-  // Admin also needs all solicitudes
+  // Admin: todas las sesiones (sin filtro de estado)
+  const { data: adminTodasSesiones = [], isLoading: isLoadingAdminSesiones } = useQuery({
+    queryKey: ['sesiones', 'admin', 'todas'],
+    queryFn: () => tutoriasService.listarSesionesAbiertas(undefined, 'todas'),
+    enabled: isAdmin,
+  })
+
+  // Admin: solicitudes pendientes (solo estados sin asignar)
   const { data: adminSolicitudes = [], isLoading: isLoadingAdminSolicitudes } = useQuery({
-    queryKey: ['solicitudes', 'admin'],
-    queryFn: () => tutoriasService.listarSolicitudes(),
+    queryKey: ['solicitudes', 'admin', 'pendientes'],
+    queryFn: () => tutoriasService.listarSolicitudes().then(
+      (s) => s.filter((x: any) => ['solicitada', 'sin_asignar'].includes(x.estado))
+    ),
     enabled: isAdmin,
   })
 
@@ -89,7 +100,8 @@ export default function TutoriasPage() {
     mutationFn: ({ solicitudId, docenteId }: { solicitudId: number; docenteId: number }) =>
       tutoriasService.asignarTutoria(solicitudId, docenteId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['solicitudes', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['solicitudes', 'admin', 'pendientes'] })
+      queryClient.invalidateQueries({ queryKey: ['sesiones', 'admin', 'todas'] })
       queryClient.invalidateQueries({ queryKey: ['sesiones-abiertas'] })
       showToast('Docente asignado correctamente', 'success')
       setAsignarModalOpen(false)
@@ -103,6 +115,7 @@ export default function TutoriasPage() {
 
   const { docentes: docentesList, isLoading: isLoadingDocentes } = useDocentes()
   const { asignaturas: asignaturasList, isLoading: isLoadingAsignaturas } = useAsignaturas()
+  const { materias: materiasEstudiante } = useStudent()
 
   const sesionesFiltradas = sesionesAbiertas.filter((s: any) =>
     !busqueda ||
@@ -468,13 +481,13 @@ export default function TutoriasPage() {
               </CardContent>
             </Card>
 
-            {isLoadingSesiones ? (
+            {isLoadingAdminSesiones ? (
               <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>Cargando sesiones...</Typography>
-            ) : sesionesAbiertas.length === 0 ? (
+            ) : adminTodasSesiones.length === 0 ? (
               <ErrorState title="Sin sesiones" message="No hay sesiones en el sistema." />
             ) : (
               <DataTable
-                rows={sesionesAbiertas}
+                rows={adminTodasSesiones}
                 columns={[
                   { id: 'codigo', label: 'Código' },
                   { id: 'materia_nombre', label: 'Materia', render: (row: any) => row.materia_nombre || '—' },
@@ -575,10 +588,10 @@ export default function TutoriasPage() {
                 onChange={(e) => setCreateForm({ ...createForm, asignatura_id: e.target.value })}
               >
                 <MenuItem value="">Ninguna</MenuItem>
-                {isLoadingAsignaturas ? (
+                {materiasEstudiante.length === 0 ? (
                   <MenuItem disabled>Cargando materias...</MenuItem>
                 ) : (
-                  asignaturasList.map((a) => (
+                  materiasEstudiante.map((a: any) => (
                     <MenuItem key={a.id} value={a.id}>{a.nombre}</MenuItem>
                   ))
                 )}

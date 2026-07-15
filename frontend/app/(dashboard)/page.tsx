@@ -5,7 +5,7 @@ import { Box, Grid, Typography, useTheme, Card, CardContent, Stack, Chip, Avatar
 import {
   School, Book, Group, Person,
   CalendarMonth, TrendingUp, Chat, Help, Assignment,
-  CheckCircle, PendingActions, AutoStories, Grade,
+  AutoStories, PersonSearch,
 } from '@mui/icons-material'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useStudent } from '@/hooks/useStudent'
@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { useAuth } from '@/hooks/useAuth'
 import { ROLES } from '@/config/permissions'
 import { tutoriasService } from '@/services/api/tutorias.service'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { ROUTES } from '@/config/routes'
 
@@ -30,10 +31,11 @@ export default function DashboardPage() {
   const theme = useTheme()
   const router = useRouter()
 
-  const isAdmin = user?.roles?.includes(ROLES.ADMIN)
-  const isManager = user?.roles?.includes(ROLES.MANAGER)
-  const isStudent = user?.roles?.includes(ROLES.ESTUDIANTE)
-  const isTeacher = user?.roles?.includes(ROLES.PROFESOR)
+  const roles = user?.roles ?? []
+  const isAdmin = roles.includes(ROLES.ADMIN)
+  const isManager = roles.includes(ROLES.MANAGER)
+  const isStudent = !isAdmin && roles.includes(ROLES.ESTUDIANTE)
+  const isTeacher = !isAdmin && !isStudent && roles.includes(ROLES.PROFESOR)
   const canViewFullStats = isAdmin || isManager
 
   useEffect(() => {
@@ -46,6 +48,14 @@ export default function DashboardPage() {
       }).catch(() => {})
     }
   }, [isTeacher, docenteId])
+
+  const { data: pendientesSolicitudes = 0 } = useQuery({
+    queryKey: ['solicitudes', 'admin', 'pendientes'],
+    queryFn: () => tutoriasService.listarSolicitudes().then(
+      (s) => s.filter((x: any) => ['solicitada', 'sin_asignar'].includes(x.estado)).length
+    ),
+    enabled: isAdmin,
+  })
 
   if (isError) {
     return (
@@ -245,6 +255,15 @@ export default function DashboardPage() {
                 />
               </Grid>
             ))}
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <StatCard
+                title="Solicitudes Pendientes"
+                value={pendientesSolicitudes}
+                icon={PersonSearch}
+                color="warning.main"
+                onClick={() => router.push(ROUTES.TUTORIAS)}
+              />
+            </Grid>
           </Grid>
 
           <Grid container spacing={3} sx={{ mt: 1 }}>

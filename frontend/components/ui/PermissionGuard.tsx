@@ -19,10 +19,3 @@ export function PermissionGuard({ permission, role, children, fallback = null }:
 
   return <>{children}</>
 }
-
-export function hasPermission(user: { roles?: string[]; permissions?: string[] } | null, permission?: string, role?: string): boolean {
-  if (!user) return false
-  if (role && user.roles?.includes(role)) return true
-  if (permission && user.permissions?.includes(permission)) return true
-  return false
-}

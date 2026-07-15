@@ -24,17 +24,4 @@ export function useStudent() {
   }
 }
 
-export function useStudentMaterias() {
-  const { estudianteId } = useAuth()
 
-  return useQuery({
-    queryKey: ['studentMaterias', estudianteId],
-    queryFn: async () => {
-      const { api } = await import('@/services/api')
-      const data = await api.admin.get<any>(`/internos/estudiantes/${estudianteId}/materias`)
-      return Array.isArray(data) ? data : (data.materias || [])
-    },
-    enabled: !!estudianteId,
-    staleTime: 60 * 1000,
-  })
-}

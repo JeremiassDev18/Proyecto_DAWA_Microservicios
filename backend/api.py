@@ -347,19 +347,16 @@ def create_app(service: Any) -> Flask:
         try:
             asignatura_id = request.args.get("asignatura_id")
             materia_nombre = request.args.get("materia_nombre")
-            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre)
+            tipo = request.args.get("tipo", "")
+            todas = tipo == "todas"
+            if todas:
+                user_roles = (request.user or {}).get("roles", [])
+                if "admin" not in user_roles:
+                    return jsonify({"error": "Acceso denegado"}), 403
+            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre, todas=todas)
             return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
         except Exception as e:
             logger.error(f"Error listando sesiones: {e}")
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/tutorias/sesiones/docente/<docente_id>", methods=["GET"])
-    def listar_sesiones_docente(docente_id: str):
-        try:
-            resultado = service.listar_sesiones_docente(docente_id)
-            return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
-        except Exception as e:
-            logger.error(f"Error listando sesiones del docente: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/tutorias/sesiones/<sesion_id>/inscritos", methods=["GET"])
@@ -468,15 +465,6 @@ def create_app(service: Any) -> Flask:
             logger.error(f"Error rechazando solicitud: {e}")
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/api/tutorias/solicitudes/pendientes/<docente_id>", methods=["GET"])
-    def solicitudes_pendientes_docente(docente_id: str):
-        try:
-            resultado = service.listar_solicitudes_pendientes_docente(docente_id)
-            return jsonify({"cantidad": len(resultado), "solicitudes": resultado}), 200
-        except Exception as e:
-            logger.error(f"Error listando solicitudes pendientes: {e}")
-            return jsonify({"error": str(e)}), 500
-
     # ── Rutas alias para compatibilidad con frontend ──────────────
 
     @app.route("/api/tutorias/sesiones/abiertas", methods=["GET"])
@@ -484,7 +472,13 @@ def create_app(service: Any) -> Flask:
         try:
             asignatura_id = request.args.get("asignatura_id")
             materia_nombre = request.args.get("materia_nombre")
-            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre)
+            tipo = request.args.get("tipo", "")
+            todas = tipo == "todas"
+            if todas:
+                user_roles = (request.user or {}).get("roles", [])
+                if "admin" not in user_roles:
+                    return jsonify({"error": "Acceso denegado"}), 403
+            resultado = service.listar_sesiones_abiertas(asignatura_id, materia_nombre, todas=todas)
             return jsonify({"cantidad": len(resultado), "sesiones": resultado}), 200
         except Exception as e:
             logger.error(f"Error listando sesiones abiertas: {e}")

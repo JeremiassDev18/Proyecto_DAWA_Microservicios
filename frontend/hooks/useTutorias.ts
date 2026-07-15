@@ -170,6 +170,7 @@ export function useTutorias(estudianteId?: number, periodoId?: number, docenteId
     }) => tutoriasService.crearSesionAdmin(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sesiones-abiertas'] })
+      queryClient.invalidateQueries({ queryKey: ['sesiones', 'admin', 'todas'] })
       queryClient.invalidateQueries({ queryKey: ['sesiones-docente'] })
       showToast('Sesión de tutoría creada correctamente', 'success')
     },

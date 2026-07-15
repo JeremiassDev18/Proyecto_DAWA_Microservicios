@@ -7,6 +7,14 @@ import type { Carrera } from '@/types/admin.types'
 const formFields: FormField[] = [
   { name: 'nombre', label: 'Nombre', required: true },
   { name: 'codigo', label: 'Código', required: true },
+  {
+    name: 'modalidad', label: 'Modalidad', type: 'select', required: true,
+    options: [
+      { value: 'Presencial', label: 'Presencial' },
+      { value: 'Semipresencial', label: 'Semipresencial' },
+      { value: 'En Línea', label: 'En Línea' },
+    ],
+  },
   { name: 'facultad_id', label: 'Facultad ID', type: 'number', required: true },
   { name: 'activo', label: 'Estado', type: 'boolean' },
 ]
@@ -31,6 +39,7 @@ export default function CarrerasPage() {
       columns={[
         { id: 'nombre', label: 'Nombre' },
         { id: 'codigo', label: 'Código' },
+        { id: 'modalidad', label: 'Modalidad' },
         { id: 'facultad_id', label: 'Facultad' },
       ]}
       formFields={formFields}
@@ -39,7 +48,7 @@ export default function CarrerasPage() {
       entityName="carrera"
       createLabel="Nueva carrera"
       statusField="activo"
-      getInitialForm={() => ({ nombre: '', codigo: '', facultad_id: '', activo: true })}
+      getInitialForm={() => ({ nombre: '', codigo: '', modalidad: 'Presencial', facultad_id: '', activo: true })}
     />
   )
 }

@@ -1021,9 +1021,18 @@ class TutoriasService:
                 solicitud.fecha_actualizacion = _now()
 
             if detalle:
+                asistio = None
+                if solicitud and solicitud.estudiante_id:
+                    insc = db.query(InscripcionSesion).filter(
+                        InscripcionSesion.sesion_id == sesion.id,
+                        InscripcionSesion.estudiante_id == solicitud.estudiante_id
+                    ).first()
+                    if insc:
+                        asistio = insc.asistio
                 bitacora = BitacoraAtencion(
                     solicitud_id=sesion.solicitud_id,
                     observaciones=detalle,
+                    asistio=asistio,
                     fecha_registro=_now(),
                 )
                 db.add(bitacora)
@@ -1055,11 +1064,14 @@ class TutoriasService:
         self,
         asignatura_id: int | str | None = None,
         materia_nombre: str | None = None,
+        todas: bool = False,
     ) -> List[Dict[str, Any]]:
-        """Lista sesiones abiertas para que estudiantes se inscriban."""
+        """Lista sesiones. Si todas=True, omite filtro de estado (para admin)."""
         db = self._get_db()
         try:
-            query = db.query(SesionTutoria).filter(SesionTutoria.estado == "abierta")
+            query = db.query(SesionTutoria)
+            if not todas:
+                query = query.filter(SesionTutoria.estado == "abierta")
             if asignatura_id:
                 query = query.filter(SesionTutoria.asignatura_id == int(asignatura_id))
             elif materia_nombre and self.admin_client:
@@ -1071,7 +1083,7 @@ class TutoriasService:
                             query = query.filter(SesionTutoria.asignatura_id.in_(ids))
                 except Exception:
                     pass
-            sesiones = query.all()
+            sesiones = query.order_by(SesionTutoria.fecha_creacion.desc()).limit(200).all()
             cache = self._build_caches([], sesiones)
             return [self._serializar_sesion(s, cache) for s in sesiones]
         finally:
@@ -1250,18 +1262,29 @@ class TutoriasService:
             if not sesion:
                 raise ValueError("No existe la sesión")
 
+            solicitud = db.query(SolicitudTutoria).filter(
+                SolicitudTutoria.id == sesion.solicitud_id
+            ).first()
+
+            asistio = None
+            if solicitud and solicitud.estudiante_id:
+                insc = db.query(InscripcionSesion).filter(
+                    InscripcionSesion.sesion_id == sesion.id,
+                    InscripcionSesion.estudiante_id == solicitud.estudiante_id
+                ).first()
+                if insc:
+                    asistio = insc.asistio
+
             bitacora = BitacoraAtencion(
                 solicitud_id=sesion.solicitud_id,
                 observaciones=detalle,
                 temas_detectados=temas_detectados,
+                asistio=asistio,
                 fecha_registro=_now(),
             )
             db.add(bitacora)
 
             # Notificar al estudiante de la solicitud original
-            solicitud = db.query(SolicitudTutoria).filter(
-                SolicitudTutoria.id == sesion.solicitud_id
-            ).first()
             if solicitud and solicitud.estudiante_id:
                 self._crear_notificacion(db, sesion.solicitud_id, solicitud.estudiante_id, "estudiante",
                                          "bitacora", f"Se ha registrado una bitácora para la sesión #{sesion.id}.")
@@ -1284,6 +1307,7 @@ class TutoriasService:
                 "sesion_id": int(sesion_id),
                 "observaciones": bitacora.observaciones,
                 "temas_detectados": bitacora.temas_detectados,
+                "asistio": bitacora.asistio,
                 "fecha_registro": bitacora.fecha_registro.isoformat() if bitacora.fecha_registro else None,
             }
         except Exception:

@@ -16,7 +16,7 @@ export const menuItems: MenuItem[] = [
   { icon: Dashboard, label: 'Dashboard', path: ROUTES.HOME },
   { icon: Chat, label: 'Chat', path: ROUTES.CHAT },
   { icon: Assessment, label: 'Métricas', path: ROUTES.METRICAS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
-  { icon: Pending, label: 'Pendientes IA', path: ROUTES.PENDIENTES, roles: [ROLES.ADMIN] },
+  { icon: Pending, label: 'Consultas sin respuesta', path: ROUTES.PENDIENTES, roles: [ROLES.ADMIN] },
   { icon: People, label: 'Administración', path: ROUTES.ADMIN_USUARIOS, roles: [ROLES.ADMIN] },
   { icon: Groups, label: 'Maestros', path: ROUTES.MAESTROS, roles: [ROLES.ADMIN] },
   { icon: School, label: 'Académico', path: ROUTES.ACADEMICO_CARRERAS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
